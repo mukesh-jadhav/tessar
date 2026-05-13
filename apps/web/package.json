@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "next build",
+    "build": "pnpm gen:tokens && prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "prisma generate && tsc --noEmit",
