@@ -95,6 +95,40 @@ jobs:
           docker push "$IMAGE"
           echo "WEB_IMAGE=$IMAGE" >> "$GITHUB_ENV"
 
+      # ----- Prisma migrations (Cloud Run Job) -----
+      # Builds a small one-shot image (`--target migrate`) and runs
+      # `prisma migrate deploy` against the live DB before the new web
+      # revision is rolled out. A failed migration aborts the deploy.
+      - name: Build & push migrate image
+        if: steps.web_dockerfile.outputs.exists == 'true'
+        run: |
+          IMAGE="$AR_HOST/$PROJECT_ID/${{ vars.GCP_AR_REPO_WEB }}/web-migrate:$IMAGE_TAG"
+          docker build -f apps/web/Dockerfile --target migrate -t "$IMAGE" .
+          docker push "$IMAGE"
+          echo "MIGRATE_IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Apply Prisma migrations via Cloud Run Job
+        if: steps.web_dockerfile.outputs.exists == 'true'
+        run: |
+          JOB="${{ vars.GCP_RUN_SERVICE_WEB }}-migrate"
+          # `deploy` is upsert: creates the job on first run, updates it after.
+          gcloud run jobs deploy "$JOB" \
+            --project "$PROJECT_ID" \
+            --region "$REGION" \
+            --image "$MIGRATE_IMAGE" \
+            --service-account "tessar-web@$PROJECT_ID.iam.gserviceaccount.com" \
+            --vpc-connector "tessar-dev-conn" \
+            --vpc-egress "private-ranges-only" \
+            --set-secrets "DATABASE_URL=database-url:latest" \
+            --max-retries 1 \
+            --task-timeout "10m" \
+            --quiet
+          gcloud run jobs execute "$JOB" \
+            --project "$PROJECT_ID" \
+            --region "$REGION" \
+            --wait \
+            --quiet
+
       - name: Deploy web to Cloud Run
         if: steps.web_dockerfile.outputs.exists == 'true'
         run: |

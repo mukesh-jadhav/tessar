@@ -80,3 +80,34 @@ EXPOSE 8080
 
 # The standalone output places its server.js at the workspace path.
 CMD ["node", "apps/web/server.js"]
+
+# ─── Stage 4: migrate ──────────────────────────────────────────────────────
+# One-shot image used by a Cloud Run Job to apply Prisma migrations against
+# the dev/prod database. Built with `--target migrate` and run with
+# `gcloud run jobs execute`. Reuses the deps stage so the prisma CLI and
+# the generated query engine binary are both already present.
+FROM node:22-bookworm-slim AS migrate
+
+ENV PNPM_HOME=/pnpm \
+    PATH=/pnpm:/repo/node_modules/.bin:$PATH \
+    NODE_ENV=production \
+    CI=1
+RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
+
+WORKDIR /repo
+
+# Bring in the installed node_modules (incl. prisma CLI) + workspace
+# manifests so pnpm/prisma resolve correctly.
+COPY --from=deps /repo/node_modules ./node_modules
+COPY --from=deps /repo/apps/web/node_modules ./apps/web/node_modules
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY apps/web/package.json ./apps/web/package.json
+# Generated client (libquery_engine for debian-openssl-3.0.x).
+COPY --from=builder /repo/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /repo/apps/web/node_modules/.prisma ./apps/web/node_modules/.prisma
+# Schema + migrations.
+COPY apps/web/prisma ./apps/web/prisma
+
+# `prisma migrate deploy` exits non-zero on any failure → Cloud Run Job
+# execution will fail and CI will stop the deploy.
+CMD ["pnpm", "--filter", "@tessar/web", "exec", "prisma", "migrate", "deploy"]
