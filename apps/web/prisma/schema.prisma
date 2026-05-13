@@ -9,6 +9,9 @@
 generator client {
   provider        = "prisma-client-js"
   previewFeatures = ["postgresqlExtensions"]
+  // Cloud Run runner = node:22-bookworm-slim (OpenSSL 3.x).
+  // Local dev (Windows) = native. Keep both.
+  binaryTargets   = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
