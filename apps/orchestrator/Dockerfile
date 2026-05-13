@@ -36,7 +36,7 @@ WORKDIR /app
 
 # Resolve and install into a project-local .venv so we can copy it
 # wholesale into the runner stage.
-COPY pyproject.toml ./
+COPY pyproject.toml README.md ./
 # uv.lock is optional today; copy if present (won't fail if missing
 # thanks to the * pattern).
 COPY uv.loc[k] ./
@@ -80,7 +80,7 @@ RUN groupadd --system --gid 1001 worker \
 
 COPY --from=builder --chown=worker:worker /app/.venv ./.venv
 COPY --chown=worker:worker tessar ./tessar
-COPY --chown=worker:worker pyproject.toml ./
+COPY --chown=worker:worker pyproject.toml README.md ./
 
 USER worker
 EXPOSE 8080
