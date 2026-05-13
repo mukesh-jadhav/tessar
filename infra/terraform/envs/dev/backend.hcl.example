@@ -1,0 +1,6 @@
+# Pass to `terraform init` for the dev workspace, e.g.:
+#   terraform init -backend-config=backend.hcl
+#
+# Values come from phase2-prereqs.md §1.6.
+bucket = "tessar-tf-state-tessar-dev"
+prefix = "envs/dev"

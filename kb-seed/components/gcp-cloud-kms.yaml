@@ -1,0 +1,50 @@
+id: gcp.cloud-kms
+name: Cloud KMS
+category: security.key-management
+vendor: google
+cloud: gcp
+pricing_model: per-active-key-version-month + per-cryptographic-operation
+baseline_cost_usd_per_month: 3
+baseline_cost_assumptions: |
+  ~5 active key versions, < 50k crypto operations per month. HSM-backed keys
+  cost ~10x more — only justify when FIPS 140-2 L3 is a stated requirement.
+regions:
+  - asia-south1
+  - us-central1
+  - europe-west1
+  - global
+compliance:
+  - SOC2
+  - ISO27001
+  - HIPAA-eligible
+  - FedRAMP-High
+  - FIPS-140-2-L1
+capabilities:
+  - envelope-encryption
+  - cmek-for-cloud-sql
+  - cmek-for-cloud-storage
+  - asymmetric-signing
+  - automatic-rotation
+limits:
+  max_keys_per_keyring: 10000
+alternatives:
+  - id: gcp.secret-manager
+    why_not_default: |
+      Secret Manager stores secrets directly. KMS encrypts keys/data — they
+      complement, not replace, each other. Use both.
+  - id: external.hashicorp-vault
+    why_not_default: |
+      Vault is powerful but adds an HA cluster to operate. Skip until
+      multi-cloud key custody or dynamic secret leasing becomes a hard
+      requirement.
+sources:
+  - url: https://cloud.google.com/kms/docs
+    snapshot_date: 2026-05-11
+    title: "Cloud KMS — overview"
+  - url: https://cloud.google.com/kms/pricing
+    snapshot_date: 2026-05-11
+    title: "Cloud KMS — pricing"
+last_verified_at: 2026-05-11
+notes: |
+  Used for envelope-encrypting any user-supplied OAuth refresh tokens or
+  API credentials a TESSAR-recommended architecture would need to store.

@@ -1,0 +1,49 @@
+id: gcp.pubsub
+name: Pub/Sub
+category: messaging.queue-managed
+vendor: google
+cloud: gcp
+pricing_model: per-GiB ingress + per-GiB egress (first 10 GiB/month free)
+baseline_cost_usd_per_month: 5
+baseline_cost_assumptions: |
+  ≤ 50 GiB total throughput per month across topic + DLQ. Free tier
+  (10 GiB/mo) covers most pre-launch usage.
+regions:
+  - global
+compliance:
+  - SOC2
+  - ISO27001
+  - HIPAA-eligible
+capabilities:
+  - durable-queue
+  - push-subscription
+  - pull-subscription
+  - dead-letter-queue
+  - exactly-once-delivery
+  - oidc-push-auth
+limits:
+  max_message_size_mib: 10
+  max_ack_deadline_s: 600
+  max_retention_days: 31
+alternatives:
+  - id: gcp.cloud-tasks
+    why_not_default: |
+      Cloud Tasks is point-to-point HTTP enqueue (no fan-out, no retention,
+      no DLQ semantics). Pick when you need scheduled tasks rather than a
+      real durable queue with reprocessing.
+  - id: external.kafka
+    why_not_default: |
+      Self-managed or Confluent Kafka is a major operational lift; only
+      justified when ordered partitioned streams or > 100 MB/s sustained
+      throughput is a real requirement.
+sources:
+  - url: https://cloud.google.com/pubsub/docs/overview
+    snapshot_date: 2026-05-11
+    title: "Pub/Sub — overview"
+  - url: https://cloud.google.com/pubsub/pricing
+    snapshot_date: 2026-05-11
+    title: "Pub/Sub — pricing"
+last_verified_at: 2026-05-11
+notes: |
+  Durable web→worker handoff. OIDC-verified push subscription targets the
+  orchestrator Cloud Run service. DLQ after 5 delivery attempts.

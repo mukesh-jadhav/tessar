@@ -1,0 +1,50 @@
+id: gcp.cloud-run
+name: Cloud Run
+category: compute.serverless-containers
+vendor: google
+cloud: gcp
+pricing_model: per-request + per-vCPU-second + per-GiB-second + min-instances flat
+baseline_cost_usd_per_month: 30
+baseline_cost_assumptions: |
+  1 always-on min-instance (web tier) at 1 vCPU / 512 MiB, ~5M requests/month,
+  light egress. Worker service at min-instances=0 adds ~$0 idle.
+regions:
+  - asia-south1
+  - us-central1
+  - europe-west1
+compliance:
+  - SOC2
+  - ISO27001
+  - HIPAA-eligible
+capabilities:
+  - http-server
+  - background-worker
+  - scale-to-zero
+  - websockets-streaming
+  - pubsub-push-target
+limits:
+  max_request_timeout_s: 3600
+  max_memory_gib: 32
+  max_vcpu: 8
+  cold_start_typical_ms: 1000
+alternatives:
+  - id: gcp.gke-autopilot
+    why_not_default: |
+      GKE Autopilot is overkill for ≤10 engineers; adds cluster ops burden and
+      a per-pod minimum cost floor. Pick it only when sidecars, custom
+      networking, or > 60-min jobs are required.
+  - id: gcp.app-engine-standard
+    why_not_default: |
+      App Engine Standard has tighter runtime constraints (no Docker, limited
+      languages) and a less active product roadmap than Cloud Run.
+sources:
+  - url: https://cloud.google.com/run/docs/overview/what-is-cloud-run
+    snapshot_date: 2026-05-11
+    title: "Cloud Run — overview"
+  - url: https://cloud.google.com/run/pricing
+    snapshot_date: 2026-05-11
+    title: "Cloud Run — pricing"
+last_verified_at: 2026-05-11
+notes: |
+  Default web/worker hosting choice for TESSAR's MVP. Push-subscription target
+  for Pub/Sub. See MVP.md §5.2.

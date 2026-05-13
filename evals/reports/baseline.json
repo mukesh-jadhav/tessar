@@ -1,0 +1,9 @@
+{
+  "_comment": "Baseline aggregate score for the eval suite. Updated by hand after a verified-good nightly run. PR CI compares against this.",
+  "version": 0,
+  "established_at": null,
+  "kb_snapshot_id": null,
+  "aggregate_score": null,
+  "pass_rate": null,
+  "scenario_scores": {}
+}

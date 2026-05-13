@@ -1,0 +1,49 @@
+id: stripe.checkout
+name: Stripe Checkout
+category: payments.hosted-checkout
+vendor: stripe
+cloud: none
+pricing_model: per-successful-transaction (~2.9% + fixed fee, region-dependent)
+baseline_cost_usd_per_month: 0
+baseline_cost_assumptions: |
+  Pure variable cost — no monthly platform fee at MVP. Per-transaction fees
+  are revenue-coupled, so they show up in the per-run unit-economics model
+  rather than the fixed-cost line.
+regions:
+  - global
+compliance:
+  - PCI-DSS-Level-1
+  - SOC2
+  - ISO27001
+capabilities:
+  - hosted-checkout-page
+  - one-time-payments
+  - subscriptions
+  - webhooks-with-signature
+  - customer-portal
+  - tax-calculation-add-on
+  - 3ds-strong-customer-auth
+limits:
+  max_line_items_per_session: 100
+alternatives:
+  - id: external.razorpay
+    why_not_default: |
+      Razorpay is the right pick when the primary market is India (UPI,
+      lower transaction fees domestically, INR settlement). Stripe's India
+      acquiring is more expensive and UPI support is newer.
+  - id: external.paddle
+    why_not_default: |
+      Paddle acts as a merchant of record and handles global sales tax. Worth
+      it when global VAT/GST compliance is more painful than Paddle's
+      higher per-transaction cut. Skip for a single-tier MVP.
+sources:
+  - url: https://docs.stripe.com/payments/checkout
+    snapshot_date: 2026-05-11
+    title: "Stripe Checkout — docs"
+  - url: https://stripe.com/pricing
+    snapshot_date: 2026-05-11
+    title: "Stripe — pricing"
+last_verified_at: 2026-05-11
+notes: |
+  Pay-per-run checkout for TESSAR ($10/run at MVP per ADR / pricing.ts). All
+  webhook handlers must verify signatures and use idempotency keys.

@@ -1,0 +1,107 @@
+/**
+ * Greenlight color overrides.
+ *
+ * Hand-pinned roles to match https://greenlight.report/ exactly. Layered on
+ * top of `tokens.generated.css` so the M3 seed still drives the wider tonal
+ * palette (containers, inverse surfaces, error roles), but the surfaces and
+ * roles a user actually SEES on every screen match Greenlight's reference
+ * pixel values.
+ *
+ * Source values (sampled from greenlight.report on 2026-05-11):
+ *   - primary green       #137333  rgb(19, 115, 51)
+ *   - primary tint        #E6F4EA  rgb(230, 244, 234)
+ *   - body text           #1F1F1F  rgb(31, 31, 31)
+ *   - body muted          #5F6368  rgb(95, 99, 104)
+ *   - body subtle         #80868B  rgb(128, 134, 139)
+ *   - hairline border     #E8EAED  rgb(232, 234, 237)
+ *   - mid border          #CCCFD3  rgb(204, 207, 211)
+ *   - page surface        #FFFFFF  rgb(255, 255, 255)
+ *   - section tint        #F8F9FA  rgb(248, 249, 250)
+ *   - card tint           #F1F3F4  rgb(241, 243, 244)
+ *
+ * Dark scheme keeps the same green hue but inverts neutrals to Material's
+ * standard dark surfaces — Greenlight itself ships light-only, so dark mode
+ * is our extension of the same color system.
+ *
+ * IMPORT ORDER: this file MUST come after `tokens.generated.css` in
+ * `globals.css` so these declarations win the cascade.
+ */
+
+:root,
+:root[data-theme="light"] {
+  /* Brand */
+  --md-sys-color-primary: 19 115 51;
+  --md-sys-color-on-primary: 255 255 255;
+  --md-sys-color-primary-container: 230 244 234;
+  --md-sys-color-on-primary-container: 19 115 51;
+  --md-sys-color-inverse-primary: 129 218 141;
+
+  /* Surfaces */
+  --md-sys-color-background: 255 255 255;
+  --md-sys-color-on-background: 31 31 31;
+  --md-sys-color-surface: 255 255 255;
+  --md-sys-color-on-surface: 31 31 31;
+  --md-sys-color-surface-variant: 241 243 244;
+  --md-sys-color-on-surface-variant: 95 99 104;
+
+  /* Layered surface scale (Greenlight uses just two — page + section tint) */
+  --md-sys-color-surface-container-lowest: 255 255 255;
+  --md-sys-color-surface-container-low: 248 249 250;
+  --md-sys-color-surface-container: 248 249 250;
+  --md-sys-color-surface-container-high: 241 243 244;
+  --md-sys-color-surface-container-highest: 232 234 237;
+
+  /* Borders & dividers */
+  --md-sys-color-outline: 196 200 205;
+  --md-sys-color-outline-variant: 218 221 225;
+}
+
+:root[data-theme="dark"] {
+  --md-sys-color-primary: 129 218 141;
+  --md-sys-color-on-primary: 0 57 18;
+  --md-sys-color-primary-container: 0 83 28;
+  --md-sys-color-on-primary-container: 156 246 168;
+  --md-sys-color-inverse-primary: 19 115 51;
+
+  --md-sys-color-background: 24 25 26;
+  --md-sys-color-on-background: 232 234 237;
+  --md-sys-color-surface: 24 25 26;
+  --md-sys-color-on-surface: 232 234 237;
+  --md-sys-color-surface-variant: 60 64 67;
+  --md-sys-color-on-surface-variant: 189 193 198;
+
+  --md-sys-color-surface-container-lowest: 18 19 20;
+  --md-sys-color-surface-container-low: 28 29 30;
+  --md-sys-color-surface-container: 32 33 35;
+  --md-sys-color-surface-container-high: 40 41 43;
+  --md-sys-color-surface-container-highest: 48 49 51;
+
+  --md-sys-color-outline: 138 144 149;
+  --md-sys-color-outline-variant: 74 78 82;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --md-sys-color-primary: 129 218 141;
+    --md-sys-color-on-primary: 0 57 18;
+    --md-sys-color-primary-container: 0 83 28;
+    --md-sys-color-on-primary-container: 156 246 168;
+    --md-sys-color-inverse-primary: 19 115 51;
+
+    --md-sys-color-background: 24 25 26;
+    --md-sys-color-on-background: 232 234 237;
+    --md-sys-color-surface: 24 25 26;
+    --md-sys-color-on-surface: 232 234 237;
+    --md-sys-color-surface-variant: 60 64 67;
+    --md-sys-color-on-surface-variant: 189 193 198;
+
+    --md-sys-color-surface-container-lowest: 18 19 20;
+    --md-sys-color-surface-container-low: 28 29 30;
+    --md-sys-color-surface-container: 32 33 35;
+    --md-sys-color-surface-container-high: 40 41 43;
+    --md-sys-color-surface-container-highest: 48 49 51;
+
+    --md-sys-color-outline: 138 144 149;
+    --md-sys-color-outline-variant: 74 78 82;
+  }
+}

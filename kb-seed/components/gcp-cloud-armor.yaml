@@ -1,0 +1,43 @@
+id: gcp.cloud-armor
+name: Cloud Armor
+category: security.web-application-firewall
+vendor: google
+cloud: gcp
+pricing_model: per-policy-month + per-rule-month + per-million-requests-evaluated
+baseline_cost_usd_per_month: 6
+baseline_cost_assumptions: |
+  1 security policy, ~10 rules (rate-limit + default-allow), < 5M requests
+  evaluated per month. Adding the OWASP preconfigured WAF ruleset bumps this
+  to ~$25/mo at the same volume.
+regions:
+  - global
+compliance:
+  - SOC2
+  - ISO27001
+capabilities:
+  - rate-limiting
+  - geo-blocking
+  - owasp-preconfigured-rules
+  - bot-management
+  - ddos-protection
+  - layer-7-policy
+limits:
+  max_rules_per_policy: 200
+alternatives:
+  - id: external.cloudflare-waf
+    why_not_default: |
+      Cloudflare WAF is excellent but requires routing DNS through Cloudflare
+      and adds a second edge vendor. Cloud Armor stays within the GCP edge
+      and IAM perimeter — the lower-coordination choice for MVP.
+sources:
+  - url: https://cloud.google.com/armor/docs
+    snapshot_date: 2026-05-11
+    title: "Cloud Armor — overview"
+  - url: https://cloud.google.com/armor/pricing
+    snapshot_date: 2026-05-11
+    title: "Cloud Armor — pricing"
+last_verified_at: 2026-05-11
+notes: |
+  Attached to the Global External HTTPS LB in front of Cloud Run. OWASP
+  preconfigured WAF deferred to Phase 4 (use ruleset
+  `owasp-crs-v030301-stable`; the v030001 ruleset is retired).

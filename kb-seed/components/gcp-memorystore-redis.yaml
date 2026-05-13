@@ -1,0 +1,49 @@
+id: gcp.memorystore-redis
+name: Memorystore for Redis
+category: cache.in-memory-managed
+vendor: google
+cloud: gcp
+pricing_model: per-GiB-month flat (Basic) + cross-AZ replication (Standard)
+baseline_cost_usd_per_month: 35
+baseline_cost_assumptions: |
+  BASIC tier, 1 GiB, single-zone, AUTH + TLS on. STANDARD_HA roughly doubles
+  the cost for replicated failover.
+regions:
+  - asia-south1
+  - us-central1
+  - europe-west1
+compliance:
+  - SOC2
+  - ISO27001
+capabilities:
+  - cache
+  - pubsub-streams
+  - sse-fanout
+  - rate-limiting
+  - session-store
+limits:
+  max_capacity_gib_basic: 300
+  max_capacity_gib_standard: 300
+  redis_version: "7.2"
+alternatives:
+  - id: gcp.memorystore-valkey
+    why_not_default: |
+      Valkey is the OSS fork — pick if licensing concerns about Redis Inc.
+      become a procurement blocker. Functionally equivalent for our cache +
+      Streams usage at MVP.
+  - id: external.upstash
+    why_not_default: |
+      Upstash is per-request priced and great for serverless edge but adds a
+      non-GCP vendor and egress costs across the network boundary.
+sources:
+  - url: https://cloud.google.com/memorystore/docs/redis
+    snapshot_date: 2026-05-11
+    title: "Memorystore for Redis — overview"
+  - url: https://cloud.google.com/memorystore/docs/redis/pricing
+    snapshot_date: 2026-05-11
+    title: "Memorystore for Redis — pricing"
+last_verified_at: 2026-05-11
+notes: |
+  Used by TESSAR for live progress event Streams (worker → SSE) and
+  prompt/retrieval cache. Events also persisted to Postgres `run_events` so
+  Redis loss is recoverable.

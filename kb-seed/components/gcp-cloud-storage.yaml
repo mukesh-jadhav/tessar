@@ -1,0 +1,51 @@
+id: gcp.cloud-storage
+name: Cloud Storage
+category: storage.object
+vendor: google
+cloud: gcp
+pricing_model: per-GiB-month + per-class-A/B-operation + egress
+baseline_cost_usd_per_month: 3
+baseline_cost_assumptions: |
+  50 GiB Standard storage in single region, modest read volume, lifecycle
+  rule moving artifacts to Nearline at 30 days. No multi-region replication.
+regions:
+  - asia-south1
+  - us-central1
+  - europe-west1
+  - multi-region (NAM/EUR/ASIA)
+compliance:
+  - SOC2
+  - ISO27001
+  - HIPAA-eligible
+  - FedRAMP-High
+capabilities:
+  - object-storage
+  - signed-urls
+  - lifecycle-rules
+  - versioning
+  - cmek-encryption
+  - hmac-keys
+limits:
+  max_object_size_tib: 5
+  max_bucket_name_chars: 63
+alternatives:
+  - id: gcp.firestore
+    why_not_default: |
+      Firestore is a document DB, not blob storage. Wrong tool for design
+      packages, PDFs, exported artifacts.
+  - id: external.s3
+    why_not_default: |
+      AWS S3 would force a cross-cloud egress charge for every download from
+      a GCP-hosted backend, plus an extra IAM surface to manage.
+sources:
+  - url: https://cloud.google.com/storage/docs
+    snapshot_date: 2026-05-11
+    title: "Cloud Storage — overview"
+  - url: https://cloud.google.com/storage/pricing
+    snapshot_date: 2026-05-11
+    title: "Cloud Storage — pricing"
+last_verified_at: 2026-05-11
+notes: |
+  Stores user briefs (encrypted) and generated design package artifacts (.md,
+  .pdf). Browser downloads go through an authenticated proxy route in the
+  web app — never hand out raw `gs://` URIs at MVP.

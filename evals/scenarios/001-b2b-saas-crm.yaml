@@ -1,0 +1,80 @@
+id: 001-b2b-saas-crm
+version: 1
+title: "Lightweight B2B CRM for early-stage sales teams"
+domain: b2b-saas
+
+brief: |
+  We are building a B2B CRM aimed at 5- to 30-person sales teams that have
+  outgrown spreadsheets but find Salesforce overwhelming. Core capabilities:
+  contact + company database with relationship graph, pipeline kanban with
+  custom stages per workspace, email sync (Gmail + Outlook) with logged
+  conversations, basic deal forecasting, and a public REST API. Expect
+  ~200 paying workspaces in year 1 (avg 8 users each), web-first with a
+  read-only mobile view, and SOC-2 readiness within 12 months.
+
+requirements:
+  must_have:
+    - "Multi-tenant data model with strict per-workspace isolation"
+    - "Email OAuth + IMAP sync (Gmail and Microsoft 365)"
+    - "Public REST API with API keys per workspace"
+    - "Background job system for email sync + webhooks"
+    - "Audit log of changes to deals/contacts (SOC-2 prerequisite)"
+    - "Daily backups with documented RPO/RTO"
+  must_not:
+    - "Multi-region active-active (overkill for 200 workspaces)"
+    - "Custom-built email server (use a managed sync provider)"
+    - "Self-hosted Kubernetes cluster (over-engineered for this scale)"
+  nice_to_have:
+    - "Webhook system for integration partners"
+    - "Single-sign-on (SAML) for enterprise tier"
+    - "Activity feed / changefeed for real-time collaboration"
+
+expected_components:
+  app_runtime:
+    - "Cloud Run"
+    - "Container Apps"
+    - "Fly.io"
+    - "Render"
+  database:
+    - "Cloud SQL Postgres"
+    - "Neon"
+    - "Supabase Postgres"
+    - "RDS Postgres"
+  job_queue:
+    - "Cloud Tasks"
+    - "Pub/Sub"
+    - "Inngest"
+    - "Trigger.dev"
+    - "BullMQ + Redis"
+  email_sync:
+    - "Nylas"
+    - "Aurinko"
+    - "Microsoft Graph + Gmail API (built in-house)"
+  auth:
+    - "Auth.js"
+    - "Clerk"
+    - "WorkOS"
+    - "Supabase Auth"
+  observability:
+    - "Sentry"
+    - "Datadog"
+    - "Grafana Cloud"
+
+forbidden_components:
+  - "Cassandra"
+  - "DynamoDB" # poor fit for relational CRM data with joins
+  - "Apache Kafka" # overkill at this scale
+  - "Elasticsearch as primary store"
+  - "Self-managed Kubernetes"
+
+max_cost_usd: 0.50
+
+expected_brief_cost_usd_per_month:
+  min: 200
+  max: 1500
+
+notes: |
+  Canonical "boring B2B SaaS" scenario. Tests whether the orchestrator
+  picks a sensible Postgres-centric stack with managed email sync rather
+  than over-engineering. SOC-2 mention should pull in audit logging and
+  managed backup choices but should NOT trigger a full HIPAA/PCI overlay.

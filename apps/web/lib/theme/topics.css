@@ -1,0 +1,79 @@
+/**
+ * TESSAR — curated topic surface palette.
+ *
+ * These are NOT derived from the brand seed; they are hand-picked editorial
+ * "topic colors" for bento section cards on marketing surfaces. Each topic
+ * surface comes paired with a content-color (`-on-*`) that meets WCAG AA
+ * against the surface in both light and dark schemes.
+ *
+ * Usage rules (see design-language.instructions.md):
+ *   - One topic surface per bento card.
+ *   - Never use as page-level backgrounds, button fills, or app-chrome.
+ *   - Pair only with the matching `-on-*` content color.
+ *   - Accent (`text-primary`) is still allowed as inline emphasis on these.
+ *
+ * Tokens are emitted as RGB triples so Tailwind's `<alpha-value>` works.
+ */
+
+:root,
+:root[data-theme="light"] {
+  /* Ink — near-black, paper-cream text. The "research" topic. */
+  --tessar-ink: 18 20 28;
+  --tessar-on-ink: 240 234 220;
+  --tessar-on-ink-muted: 168 164 152;
+
+  /* Paper — warm off-white. The "deliverable" topic; reads as artifact. */
+  --tessar-paper: 246 240 226;
+  --tessar-on-paper: 35 28 22;
+  --tessar-on-paper-muted: 117 102 84;
+
+  /* Linen — cool neutral cream. The "audit / proof" topic; factual. */
+  --tessar-linen: 234 235 230;
+  --tessar-on-linen: 28 32 35;
+  --tessar-on-linen-muted: 96 102 106;
+
+  /* Sky — pale blueprint blue. The "architecture" topic; engineering. */
+  --tessar-sky: 219 230 247;
+  --tessar-on-sky: 16 32 64;
+  --tessar-on-sky-muted: 80 96 124;
+}
+
+:root[data-theme="dark"] {
+  /* In dark mode topic surfaces shift toward deeper, more saturated values
+   * while preserving their identity. Content colors are inverted. */
+  --tessar-ink: 12 14 20;
+  --tessar-on-ink: 232 226 212;
+  --tessar-on-ink-muted: 152 148 136;
+
+  --tessar-paper: 38 30 22;
+  --tessar-on-paper: 240 232 216;
+  --tessar-on-paper-muted: 176 162 140;
+
+  --tessar-linen: 32 36 40;
+  --tessar-on-linen: 220 224 228;
+  --tessar-on-linen-muted: 136 144 148;
+
+  --tessar-sky: 18 32 56;
+  --tessar-on-sky: 196 215 240;
+  --tessar-on-sky-muted: 124 144 176;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --tessar-ink: 12 14 20;
+    --tessar-on-ink: 232 226 212;
+    --tessar-on-ink-muted: 152 148 136;
+
+    --tessar-paper: 38 30 22;
+    --tessar-on-paper: 240 232 216;
+    --tessar-on-paper-muted: 176 162 140;
+
+    --tessar-linen: 32 36 40;
+    --tessar-on-linen: 220 224 228;
+    --tessar-on-linen-muted: 136 144 148;
+
+    --tessar-sky: 18 32 56;
+    --tessar-on-sky: 196 215 240;
+    --tessar-on-sky-muted: 124 144 176;
+  }
+}

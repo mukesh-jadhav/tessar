@@ -1,0 +1,92 @@
+name: PR
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: pr-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: Web (lint, typecheck, test, build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm format:check
+      - run: pnpm -r lint
+      - run: pnpm -r typecheck
+      - run: pnpm -r test --if-present
+      - run: pnpm -r build
+        env:
+          NEXT_OUTPUT: standalone
+
+  orchestrator:
+    name: Orchestrator (ruff, mypy, pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/orchestrator
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        run: pipx install uv
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy tessar
+      - run: uv run pytest -q
+
+  evals:
+    name: Evals (rubric tests + scenario validation)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: evals
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        run: pipx install uv
+      - run: uv sync --frozen
+      - name: Rubric unit tests
+        run: uv run pytest tests -q
+      - name: Validate scenario YAMLs
+        run: uv run python -m runners.run_suite
+      - name: Validate KB seed records
+        run: uv run python -m runners.validate_kb
+
+  terraform:
+    name: Terraform (fmt, validate)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/terraform
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.15.2
+          terraform_wrapper: false
+      - name: terraform fmt (check)
+        run: terraform fmt -check -recursive
+      - name: terraform init (envs/dev, no backend)
+        working-directory: infra/terraform/envs/dev
+        run: terraform init -backend=false -input=false
+      - name: terraform validate (envs/dev)
+        working-directory: infra/terraform/envs/dev
+        run: terraform validate -no-color

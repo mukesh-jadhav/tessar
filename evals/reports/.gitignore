@@ -1,0 +1,5 @@
+# gitignored: per-run reports written by `run_suite.py`. Only `baseline.json`
+# is committed; everything else here is workflow output / local exploration.
+*
+!.gitignore
+!baseline.json

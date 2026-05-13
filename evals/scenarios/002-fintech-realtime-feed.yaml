@@ -1,0 +1,83 @@
+id: 002-fintech-realtime-feed
+version: 1
+title: "Real-time portfolio feed for retail investors"
+domain: fintech
+
+brief: |
+  Mobile-first SaaS that streams a personalised portfolio feed to retail
+  investors: live quote updates, push notifications on price thresholds,
+  and an in-app news digest summarised per holding. We are launching in a
+  single market (India) with ~5k beta users, expected to grow to 50k in
+  year 1 and 250k by year 2. We need sub-2s end-to-end latency for price
+  updates, secure handling of brokerage OAuth tokens, and a clear path to
+  PCI/RBI compliance for when we add in-app trading next year. Backend
+  team is 3 engineers; we want managed services everywhere we can.
+
+requirements:
+  must_have:
+    - "WebSocket or SSE delivery of real-time price updates to mobile clients"
+    - "Push notifications (FCM + APNs)"
+    - "Secure storage of OAuth refresh tokens for brokerage integrations"
+    - "Per-user fan-out without N×M re-broadcast (efficient pub/sub)"
+    - "LLM-assisted news summarisation per ticker with caching"
+    - "Audit log of every read/write involving brokerage credentials"
+  must_not:
+    - "Self-managed Kafka cluster (3-engineer team, managed services preferred)"
+    - "Storing brokerage credentials in application database without KMS encryption"
+    - "Synchronous LLM call on every news fetch (must be cached / batched)"
+  nice_to_have:
+    - "Geographic data residency in ap-south region"
+    - "Read replica for analytics workload separation"
+    - "Feature-flag system for staged rollouts"
+
+expected_components:
+  realtime_transport:
+    - "Pub/Sub + WebSocket gateway"
+    - "Ably"
+    - "Pusher"
+    - "Firebase Realtime DB"
+    - "Cloud Run + WebSockets"
+  push_notifications:
+    - "Firebase Cloud Messaging"
+    - "OneSignal"
+    - "AWS SNS"
+  database:
+    - "Cloud SQL Postgres"
+    - "AlloyDB"
+    - "Neon"
+  cache:
+    - "Memorystore Redis"
+    - "Upstash Redis"
+    - "ElastiCache"
+  secrets:
+    - "Cloud KMS + Secret Manager"
+    - "AWS KMS"
+    - "HashiCorp Vault"
+  llm_provider:
+    - "Vertex AI Gemini"
+    - "OpenAI"
+    - "Anthropic"
+  analytics_store:
+    - "BigQuery"
+    - "ClickHouse Cloud"
+    - "Snowflake"
+
+forbidden_components:
+  - "MongoDB Atlas as primary OLTP" # weak transactional guarantees for finance
+  - "Self-managed Kafka"
+  - "Plain S3/GCS for storing OAuth tokens"
+  - "Polling-based price updates from client (must be push)"
+
+max_cost_usd: 0.50
+
+expected_brief_cost_usd_per_month:
+  min: 800
+  max: 4000
+
+notes: |
+  Tests two harder things: (a) realtime/streaming architecture choices,
+  (b) security overlay for financial data. Should pull in KMS-encrypted
+  secret storage and audit logging. Should NOT recommend a self-managed
+  Kafka cluster despite real-time being central — the brief explicitly
+  says small team + managed-services-preferred. Geographic residency
+  hint should drive an asia-south1 / Mumbai recommendation.

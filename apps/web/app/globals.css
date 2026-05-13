@@ -1,0 +1,43 @@
+/*
+ * TESSAR design tokens.
+ * @import must precede all other rules (incl. @tailwind).
+ * - tokens.generated.css — M3 tonal palette derived from BRAND_SEED.
+ * - greenlight.css       — pinned overrides for surfaces + brand to match
+ *                          greenlight.report exact pixel values.
+ * - topics.css           — hand-picked editorial topic surface palette.
+ */
+@import "../lib/theme/tokens.generated.css";
+@import "../lib/theme/greenlight.css";
+@import "../lib/theme/topics.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light dark;
+  }
+
+  html,
+  body {
+    height: 100%;
+    background-color: rgb(var(--md-sys-color-surface));
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Respect reduced-motion: spring transitions collapse to instant changes. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}

@@ -1,0 +1,87 @@
+# yaml-language-server: $schema=https://json-schema.org/draft/2020-12/schema
+#
+# JSON Schema (in YAML form) for TESSAR eval scenario files.
+# Anything in scenarios/*.yaml (excluding files starting with `_`) must validate
+# against this schema. The runner enforces validation at load time.
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "tessar:eval:scenario:v1"
+title: "TESSAR Eval Scenario"
+type: object
+required: [id, version, brief, requirements, max_cost_usd]
+additionalProperties: false
+
+properties:
+  id:
+    type: string
+    pattern: "^[0-9]{3}-[a-z0-9-]+$"
+    description: "Stable scenario id matching the file basename (e.g. 001-b2b-saas-crm)."
+
+  version:
+    type: integer
+    minimum: 1
+    description: "Bump when expectations or brief change in a way that invalidates baselines."
+
+  title:
+    type: string
+    description: "Human-readable scenario title."
+
+  domain:
+    type: string
+    enum: [b2b-saas, b2c-saas, fintech, marketplace, devtool, internal-tool]
+    description: "Domain category. Stays inside MVP scope (SaaS web apps)."
+
+  brief:
+    type: string
+    minLength: 80
+    description: "The plain-English brief fed to the orchestrator. Should look like something a real founder would type."
+
+  requirements:
+    type: object
+    required: [must_have, must_not, nice_to_have]
+    additionalProperties: false
+    properties:
+      must_have:
+        type: array
+        items: { type: string }
+        minItems: 1
+        description: "Capabilities that MUST appear in the package's requirements list AND be addressed by component picks. Used by brief-fidelity judge."
+      must_not:
+        type: array
+        items: { type: string }
+        description: "Anti-requirements. If the package recommends these the run is penalised (e.g. 'multi-region active-active' for a 50-user MVP)."
+      nice_to_have:
+        type: array
+        items: { type: string }
+        description: "Bonus capabilities. Not required to pass; judges may award partial credit."
+
+  expected_components:
+    type: object
+    description: "Soft expectations for architecture coherence. Keys are slot names (e.g. 'database'); values are acceptable picks. The coherence judge uses these as a checklist."
+    additionalProperties:
+      type: array
+      items: { type: string }
+      minItems: 1
+
+  forbidden_components:
+    type: array
+    items: { type: string }
+    description: "Components that would clearly be wrong for this brief (e.g. 'Cassandra' for a 100-user CRUD app). Penalised heavily by coherence judge."
+
+  max_cost_usd:
+    type: number
+    minimum: 0.01
+    maximum: 10
+    description: "Hard cap on LLM/search spend per run for this scenario. Run is failed + aborted if exceeded."
+
+  expected_brief_cost_usd_per_month:
+    type: object
+    description: "Sanity range for the package's total monthly infra cost at brief baseline scale. Used by an additional judge prompt at Phase 3.4+."
+    properties:
+      min: { type: number }
+      max: { type: number }
+    additionalProperties: false
+
+  notes:
+    type: string
+    description: "Free-form notes for humans grading or maintaining this scenario."

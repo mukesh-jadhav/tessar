@@ -1,0 +1,81 @@
+id: 003-marketplace-mvp
+version: 1
+title: "Two-sided marketplace MVP for hyperlocal home services"
+domain: marketplace
+
+brief: |
+  Two-sided marketplace connecting customers in 5 Indian Tier-2 cities with
+  vetted home-service professionals (electricians, plumbers, deep cleaning).
+  MVP scope: customers browse + book a slot, pros accept jobs, in-app
+  payments held in escrow until job completion, ratings both ways. Expect
+  500 pros and 5k customers across the 5 cities at launch, growing 5x in
+  year 1. Mobile-first (iOS + Android via React Native) with a thin web
+  marketing site. Founders are non-technical; budget tight. Need to ship
+  in 10 weeks. Payments must support UPI in India.
+
+requirements:
+  must_have:
+    - "Booking flow with pro availability calendar and slot reservation"
+    - "Escrow payments (capture on book, release on job-completion confirmation)"
+    - "UPI as primary payment method, with card as fallback"
+    - "Push notifications to pros for new job alerts"
+    - "Admin dashboard for the founders to manually moderate pros + handle disputes"
+    - "Two-way rating system (customer rates pro, pro rates customer)"
+  must_not:
+    - "Custom payment gateway integration (use a managed PSP with UPI)"
+    - "Microservices architecture (monolith fits 10-week shipping window better)"
+    - "GraphQL federation (over-engineered for MVP scope)"
+  nice_to_have:
+    - "Live tracking of pro arrival (ETA + map)"
+    - "Referral codes for customer acquisition"
+    - "Multi-language support (Hindi + English)"
+
+expected_components:
+  app_runtime:
+    - "Cloud Run"
+    - "Render"
+    - "Railway"
+    - "Heroku"
+  database:
+    - "Cloud SQL Postgres"
+    - "Supabase Postgres"
+    - "Neon"
+  payments:
+    - "Razorpay" # UPI native in India
+    - "Cashfree"
+    - "PhonePe Payment Gateway"
+    - "Stripe India"
+  mobile_framework:
+    - "React Native"
+    - "Expo"
+  push_notifications:
+    - "Firebase Cloud Messaging"
+    - "OneSignal"
+  admin_panel:
+    - "Retool"
+    - "Forest Admin"
+    - "Refine"
+    - "Custom Next.js admin"
+  search_geo:
+    - "Postgres + PostGIS"
+    - "Algolia"
+
+forbidden_components:
+  - "Stripe-only payments" # UPI not first-class outside India in Stripe
+  - "Self-managed Kubernetes"
+  - "Microservices split" # explicitly counter to brief constraints
+  - "Custom payment gateway"
+
+max_cost_usd: 0.50
+
+expected_brief_cost_usd_per_month:
+  min: 100
+  max: 800
+
+notes: |
+  Tests "boring is correct" — should pick a Postgres monolith on Cloud Run
+  with Razorpay for payments, Retool-style admin panel, Expo for the app.
+  Should reject microservices and over-engineered patterns even if the
+  LLM is tempted to "show off". Tight budget + non-technical founders +
+  10-week deadline are the load-bearing constraints — agents must
+  surface them in the requirements list.

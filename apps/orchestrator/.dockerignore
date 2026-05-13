@@ -1,0 +1,15 @@
+# Excluded from `docker build` context.
+.venv
+__pycache__
+**/__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.mypy_cache
+.ruff_cache
+htmlcov
+.coverage
+.env
+.env.*
+tests
+.git

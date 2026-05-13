@@ -1,0 +1,54 @@
+id: gcp.cloud-sql-postgres
+name: Cloud SQL for PostgreSQL
+category: data.relational-managed
+vendor: google
+cloud: gcp
+pricing_model: per-vCPU-hour + per-GiB-RAM-hour + per-GiB-storage-month + per-GiB-backup-month + egress
+baseline_cost_usd_per_month: 55
+baseline_cost_assumptions: |
+  db-f1-micro shared-CPU instance, 10 GiB SSD, single-zone, automated backups
+  (7-day retention), PITR on, low connection volume. HA (regional) roughly
+  doubles the compute cost.
+regions:
+  - asia-south1
+  - us-central1
+  - europe-west1
+compliance:
+  - SOC2
+  - ISO27001
+  - HIPAA-eligible
+capabilities:
+  - oltp
+  - acid
+  - postgres-extensions
+  - pgvector
+  - point-in-time-recovery
+  - private-ip
+limits:
+  max_storage_gib: 65000
+  max_connections_default: 100
+  max_postgres_version: "16"
+alternatives:
+  - id: gcp.alloydb
+    why_not_default: |
+      AlloyDB has a higher floor (~$300/mo for the smallest setup) and is
+      overkill for MVP read volume; revisit when sustained write QPS > 2k or
+      read-replica fan-out needed.
+  - id: external.neon
+    why_not_default: |
+      Neon offers serverless Postgres with branching but is not first-party
+      GCP — adds a vendor relationship and exits Cloud SQL's compliance
+      umbrella. Worth considering only when ephemeral DB-per-PR workflow is a
+      requirement.
+sources:
+  - url: https://cloud.google.com/sql/docs/postgres
+    snapshot_date: 2026-05-11
+    title: "Cloud SQL for PostgreSQL — overview"
+  - url: https://cloud.google.com/sql/pricing
+    snapshot_date: 2026-05-11
+    title: "Cloud SQL — pricing"
+last_verified_at: 2026-05-11
+notes: |
+  Single DB for relational data + pgvector embeddings at MVP per
+  architecture.instructions.md. Promote to AlloyDB or split vector store out
+  only on measured pressure.

@@ -1,0 +1,13 @@
+# Local Terraform state, plans, and provider plugins
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+
+# Real tfvars (only the .example is committed)
+terraform.tfvars
+*.auto.tfvars
+backend.hcl

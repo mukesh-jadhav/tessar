@@ -1,0 +1,36 @@
+{
+  "name": "tessar",
+  "version": "0.0.0",
+  "private": true,
+  "description": "TESSAR — researched, defensible system architectures, on demand.",
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @tessar/web dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,yaml,yml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,yaml,yml}\"",
+    "gen:tokens": "pnpm --filter @tessar/web gen:tokens",
+    "infra:up": "docker compose -f infra/docker-compose.yml up -d",
+    "infra:down": "docker compose -f infra/docker-compose.yml down",
+    "infra:logs": "docker compose -f infra/docker-compose.yml logs -f",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.1.6",
+    "lint-staged": "^15.2.10",
+    "prettier": "^3.3.3",
+    "prettier-plugin-tailwindcss": "^0.6.8"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx,json,md,yaml,yml}": "prettier --write",
+    "apps/web/**/*.{ts,tsx}": "pnpm --filter @tessar/web lint --fix --file",
+    "apps/orchestrator/**/*.py": "echo \"(orchestrator pre-commit handled via uv hooks — see CONTRIBUTING)\""
+  }
+}

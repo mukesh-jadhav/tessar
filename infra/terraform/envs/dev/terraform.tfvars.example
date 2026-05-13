@@ -1,0 +1,29 @@
+# ---------------------------------------------------------------------------
+# Copy to terraform.tfvars and fill in from docs/operations/phase2-prereqs.md §9.
+# DO NOT commit terraform.tfvars (.gitignore already covers *.tfvars).
+#
+# Mapping to the §9 hand-back form:
+#   GCP_PROJECT_ID_DEV     → project_id
+#   GCP_PROJECT_NUMBER_DEV → project_number
+#   GCP_REGION             → region            (locked decision; see MVP.md §9)
+#   DOMAIN_DEV             → fqdn
+#   DNS_OPTION             → create_dns_zone   (A → true, B → false)
+#
+# Secret values from §3–§7 are NOT set here. Terraform reads them from
+# Secret Manager at apply time via the compute module's IAM bindings.
+# Make sure §7 was completed (authjs-secret, google-oauth-client-id,
+# google-oauth-client-secret, resend-api-key) before `terraform apply`.
+# ---------------------------------------------------------------------------
+
+project_id     = "tessar-dev"
+project_number = "REPLACE_WITH_GCP_PROJECT_NUMBER_DEV" # gcloud projects describe tessar-dev --format="value(projectNumber)"
+region         = "us-central1"                         # asia-south1 | us-central1 | europe-west1 — LOCKED once chosen
+name_prefix    = "tessar-dev"
+env            = "dev"
+
+dns_root        = "tessar.dev"
+fqdn            = "dev.tessar.dev"
+create_dns_zone = false # true ↔ §2.2 Option A (Cloud DNS); false ↔ Option B (you manage NS elsewhere)
+
+deletion_protection = true # set false ONLY for throwaway sandbox apply/destroy cycles
+web_min_instances   = 0    # bump to 1 in prod; keep 0 in dev to save ~$15/mo on idle

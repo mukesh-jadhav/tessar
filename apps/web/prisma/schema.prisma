@@ -1,0 +1,242 @@
+// TESSAR — canonical schema (Prisma owns this; SQLAlchemy mirrors it).
+// See ADR-0007. Data model anchor: MVP.md §3.5.
+//
+// pgvector columns are declared via `Unsupported("vector(N)")` because
+// Prisma 5.x has no first-class vector type. Vector indexes (ivfflat / hnsw)
+// are created via raw SQL inside Prisma migrations — see
+// prisma/migrations/README.md once the first migration exists.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector, pg_trgm]
+}
+
+// ---------------------------------------------------------------------------
+// Auth.js adapter tables (NextAuth v5 / Auth.js) — names + columns must match
+// @auth/prisma-adapter exactly. Do not rename without updating the adapter.
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts Account[]
+  sessions Session[]
+  runs     Run[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ---------------------------------------------------------------------------
+// Run lifecycle (MVP.md §3.5).
+// ---------------------------------------------------------------------------
+
+enum RunStatus {
+  pending
+  running
+  awaiting_clarification
+  succeeded
+  failed
+  refunded
+
+  @@map("run_status")
+}
+
+// Payment lifecycle. Distinct from RunStatus so a run can be `pending`
+// (waiting for the worker to dequeue) AND `paid`, or `pending` AND
+// `pending` (waiting for Stripe webhook). See ADR-0009.
+enum PaymentStatus {
+  pending
+  paid
+  failed
+  refunded
+
+  @@map("payment_status")
+}
+
+model Run {
+  id                        String        @id @default(cuid())
+  userId                    String        @map("user_id")
+  status                    RunStatus     @default(pending)
+  paymentStatus             PaymentStatus @default(pending) @map("payment_status")
+  briefJson                 Json          @map("brief_json")
+  constraintsJson           Json?         @map("constraints_json")
+  priceCents                Int           @map("price_cents")
+  stripeCheckoutSessionId   String?       @map("stripe_checkout_session_id")
+  stripePaymentIntent       String?       @map("stripe_payment_intent")
+  paidAt                    DateTime?     @map("paid_at")
+  refundedAt                DateTime?     @map("refunded_at")
+  // Snapshot of the KB used by this run, so audits can replay deterministically.
+  kbSnapshotId              String?       @map("kb_snapshot_id")
+  createdAt                 DateTime      @default(now()) @map("created_at")
+  completedAt               DateTime?     @map("completed_at")
+
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  events    RunEvent[]
+  artifacts RunArtifact[]
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([status])
+  @@index([paymentStatus])
+  @@unique([stripeCheckoutSessionId])
+  @@map("runs")
+}
+
+// Append-only event log. Redis Streams is the hot path; this is the durable
+// copy that survives Redis trimming. Written by the orchestrator.
+model RunEvent {
+  id          BigInt   @id @default(autoincrement())
+  runId       String   @map("run_id")
+  ts          DateTime @default(now())
+  kind        String
+  payloadJson Json     @map("payload_json")
+
+  run Run @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId, ts])
+  @@map("run_events")
+}
+
+enum ArtifactKind {
+  package_json
+  package_md
+  package_pdf
+  diagram_svg
+  diagram_png
+  prompt_log
+  source_snapshot
+
+  @@map("artifact_kind")
+}
+
+model RunArtifact {
+  id        String       @id @default(cuid())
+  runId     String       @map("run_id")
+  kind      ArtifactKind
+  gcsUri    String       @map("gcs_uri")
+  mime      String
+  bytes     Int?
+  sha256    String?
+  createdAt DateTime     @default(now()) @map("created_at")
+
+  run Run @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@map("run_artifacts")
+}
+
+// ---------------------------------------------------------------------------
+// Knowledge base (MVP.md §3.5 + §3.6). Loaded from kb-seed/ at deploy.
+// ---------------------------------------------------------------------------
+
+model KbComponent {
+  id              String   @id @default(cuid())
+  name            String
+  category        String
+  vendor          String
+  cloud           String // "gcp" | "aws" | "azure" | "neutral"
+  pricingModel    String?  @map("pricing_model")
+  regions         String[] @default([])
+  compliance      String[] @default([])
+  limitsJson      Json?    @map("limits_json")
+  sources         String[] @default([])
+  lastVerifiedAt  DateTime @default(now()) @map("last_verified_at")
+  // 1536 dims = Vertex AI text-embedding-005 default. Index via raw SQL
+  // (HNSW recommended; ivfflat acceptable for MVP scale).
+  embedding       Unsupported("vector(1536)")?
+
+  @@unique([cloud, vendor, name])
+  @@index([category])
+  @@index([cloud])
+  @@index([lastVerifiedAt])
+  @@map("kb_components")
+}
+
+model KbPattern {
+  id             String   @id @default(cuid())
+  name           String   @unique
+  whenToUse      String   @map("when_to_use")
+  whenNotToUse   String   @map("when_not_to_use")
+  examples       String[] @default([])
+  lastVerifiedAt DateTime @default(now()) @map("last_verified_at")
+  embedding      Unsupported("vector(1536)")?
+
+  @@map("kb_patterns")
+}
+
+model KbReferenceArch {
+  id             String   @id @default(cuid())
+  domain         String
+  summary        String
+  componentsJson Json     @map("components_json")
+  lastVerifiedAt DateTime @default(now()) @map("last_verified_at")
+  embedding      Unsupported("vector(1536)")?
+
+  @@index([domain])
+  @@map("kb_reference_archs")
+}
+
+// ---------------------------------------------------------------------------
+// Eval harness (MVP.md §3.8). Read by the nightly job.
+// ---------------------------------------------------------------------------
+
+model EvalBrief {
+  id              String    @id @default(cuid())
+  brief           String
+  goldPackageJson Json      @map("gold_package_json")
+  lastScore       Float?    @map("last_score")
+  lastRunAt       DateTime? @map("last_run_at")
+
+  @@map("eval_briefs")
+}

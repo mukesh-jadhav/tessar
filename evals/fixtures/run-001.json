@@ -1,0 +1,111 @@
+{
+  "_comment": "Hand-crafted RunPackage fixture for smoke-testing the eval harness. This is NOT a real orchestrator output — Phase 3.3+ will produce real ones.",
+  "id": "fixture-001",
+  "generatedAt": "2026-05-13T12:00:00Z",
+  "kbSnapshotId": "kb-fixture",
+  "brief": "B2B CRM for ~200 small-business workspaces. Gmail/M365 sync, REST API, SOC-2 readiness.",
+  "requirements": [
+    { "id": "r1", "label": "Workspaces", "value": "200", "source": "brief" },
+    { "id": "r2", "label": "Auth", "value": "OAuth + magic link", "source": "brief" },
+    { "id": "r3", "label": "Compliance", "value": "SOC-2 prep", "source": "brief" }
+  ],
+  "nodes": [
+    { "id": "web", "label": "Cloud Run (web)", "cite": 1 },
+    { "id": "worker", "label": "Cloud Run (jobs)", "cite": 1 },
+    { "id": "db", "label": "Cloud SQL Postgres", "cite": 2 },
+    { "id": "queue", "label": "Pub/Sub", "cite": 3 },
+    { "id": "kms", "label": "Cloud KMS", "cite": 4 }
+  ],
+  "decisions": [
+    {
+      "id": "d1",
+      "topic": "App runtime",
+      "pick": "Cloud Run",
+      "vs": "vs GKE Autopilot · App Engine",
+      "why": "managed, scale-to-zero, fits 3-engineer team",
+      "conf": "high",
+      "cite": 1,
+      "reversibility": "2-way",
+      "blastRadius": "compute",
+      "revisitAt": "if sustained > 80 RPS or need for sidecars"
+    },
+    {
+      "id": "d2",
+      "topic": "Database",
+      "pick": "Cloud SQL Postgres",
+      "vs": "vs Neon · AlloyDB",
+      "why": "predictable, SOC-2 friendly, team knows Postgres",
+      "conf": "high",
+      "cite": 2,
+      "reversibility": "1-way",
+      "blastRadius": "data",
+      "revisitAt": "if write QPS > 2k"
+    },
+    {
+      "id": "d3",
+      "topic": "Async work",
+      "pick": "Pub/Sub",
+      "vs": "vs Cloud Tasks · self-hosted Redis queue",
+      "why": "managed, integrates with Cloud Run push",
+      "conf": "med",
+      "cite": 3,
+      "reversibility": "2-way",
+      "blastRadius": "queue",
+      "revisitAt": "if ordered processing required"
+    }
+  ],
+  "bom": [
+    { "id": "b1", "name": "Cloud Run", "kind": "compute", "baseCost": 30.0, "cite": 1 },
+    { "id": "b2", "name": "Cloud SQL Postgres", "kind": "data", "baseCost": 80.0, "cite": 2 },
+    { "id": "b3", "name": "Pub/Sub", "kind": "queue", "baseCost": 5.0, "cite": 3 },
+    { "id": "b4", "name": "Cloud KMS", "kind": "security", "baseCost": 3.0, "cite": 4 }
+  ],
+  "risks": [
+    {
+      "id": "k1",
+      "title": "DB single-zone outage",
+      "severity": "med",
+      "likelihood": "low",
+      "mitigation": "enable HA in prod",
+      "cite": 2
+    },
+    {
+      "id": "k2",
+      "title": "OAuth token theft",
+      "severity": "high",
+      "likelihood": "low",
+      "mitigation": "encrypt with KMS, short refresh window",
+      "cite": 4
+    }
+  ],
+  "sources": [
+    {
+      "id": 1,
+      "title": "Cloud Run docs",
+      "publisher": "GCP",
+      "url": "https://cloud.google.com/run/docs",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 2,
+      "title": "Cloud SQL Postgres pricing",
+      "publisher": "GCP",
+      "url": "https://cloud.google.com/sql/pricing",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 3,
+      "title": "Pub/Sub pricing",
+      "publisher": "GCP",
+      "url": "https://cloud.google.com/pubsub/pricing",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 4,
+      "title": "Cloud KMS docs",
+      "publisher": "GCP",
+      "url": "https://cloud.google.com/kms/docs",
+      "verifiedAt": "2026-05-01"
+    }
+  ]
+}

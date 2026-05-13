@@ -1,0 +1,46 @@
+id: resend.transactional-email
+name: Resend
+category: messaging.transactional-email
+vendor: resend
+cloud: none
+pricing_model: tiered per-month (free up to 3k emails/mo + 1 domain), then per-1k emails
+baseline_cost_usd_per_month: 0
+baseline_cost_assumptions: |
+  Free tier (3,000 emails/month, 1 verified domain) covers MVP magic-link +
+  receipt traffic. First paid tier is ~$20/mo for 50k emails.
+regions:
+  - global
+compliance:
+  - SOC2-Type-II
+  - GDPR
+capabilities:
+  - transactional-send
+  - smtp-gateway
+  - rest-api
+  - react-email-templates
+  - dkim-spf-dmarc
+  - webhooks-delivery-events
+limits:
+  max_attachments_size_mib: 40
+  max_recipients_per_email: 50
+alternatives:
+  - id: external.postmark
+    why_not_default: |
+      Postmark has a longer track record on transactional deliverability but
+      lacks a free tier — pick if Resend's deliverability stops being
+      acceptable for magic-link auth.
+  - id: external.sendgrid
+    why_not_default: |
+      SendGrid mixes marketing + transactional and the API surface is
+      heavier than required for sending magic links and receipts.
+sources:
+  - url: https://resend.com/docs
+    snapshot_date: 2026-05-11
+    title: "Resend — docs"
+  - url: https://resend.com/pricing
+    snapshot_date: 2026-05-11
+    title: "Resend — pricing"
+last_verified_at: 2026-05-11
+notes: |
+  Used for Auth.js magic links (SMTP gateway in cloud) and run-completion
+  notifications. Local dev uses Mailpit on the same SMTP code path.

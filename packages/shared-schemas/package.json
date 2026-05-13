@@ -1,0 +1,12 @@
+{
+  "name": "@tessar/shared-schemas",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "index.ts",
+  "scripts": {
+    "lint": "echo \"shared-schemas: nothing to lint yet\"",
+    "typecheck": "echo \"shared-schemas: nothing to typecheck yet\"",
+    "build": "echo \"shared-schemas: nothing to build yet\""
+  }
+}

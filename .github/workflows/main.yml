@@ -1,0 +1,134 @@
+name: Main
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: main
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r lint
+      - run: pnpm -r typecheck
+      - run: pnpm -r build
+        env:
+          NEXT_OUTPUT: standalone
+
+  # ---------------------------------------------------------------------------
+  # Deploy to GCP `dev` via Workload Identity Federation.
+  #
+  # Prerequisites (from docs/operations/phase2-prereqs.md §6 + §9):
+  #   Repository VARIABLES (Settings → Secrets and variables → Actions → Variables):
+  #     GCP_PROJECT_ID_DEV       e.g. "tessar-dev"
+  #     GCP_REGION               e.g. "us-central1"
+  #     GCP_WIF_PROVIDER         "projects/<num>/locations/global/workloadIdentityPools/github-pool/providers/github-provider"
+  #     GCP_DEPLOYER_SA          "tessar-ci-dev@tessar-dev.iam.gserviceaccount.com"
+  #     GCP_AR_REPO_WEB          "tessar-web"            (Artifact Registry repo from compute module)
+  #     GCP_AR_REPO_ORCH         "tessar-orchestrator"
+  #     GCP_RUN_SERVICE_WEB      "tessar-dev-web"        (Cloud Run service name from compute module)
+  #     GCP_RUN_SERVICE_ORCH     "tessar-dev-orchestrator"
+  #
+  # Job auto-skips until GCP_PROJECT_ID_DEV is set, so it's safe to merge now.
+  #
+  # NOTE: requires apps/web/Dockerfile and apps/orchestrator/Dockerfile to exist.
+  # Both are added at the start of Phase 3 (or whenever we move off the
+  # cloudrun/hello placeholder image baked into the Terraform compute module).
+  # ---------------------------------------------------------------------------
+  deploy-dev:
+    name: Deploy → GCP dev
+    needs: build
+    if: ${{ vars.GCP_PROJECT_ID_DEV != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # required for WIF
+    env:
+      PROJECT_ID: ${{ vars.GCP_PROJECT_ID_DEV }}
+      REGION: ${{ vars.GCP_REGION }}
+      AR_HOST: ${{ vars.GCP_REGION }}-docker.pkg.dev
+      IMAGE_TAG: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP via WIF
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SA }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker "$AR_HOST" --quiet
+
+      # ----- web -----
+      - name: Check for web Dockerfile
+        id: web_dockerfile
+        run: |
+          if [ -f apps/web/Dockerfile ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::apps/web/Dockerfile missing — skipping web image build/deploy."
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build & push web image
+        if: steps.web_dockerfile.outputs.exists == 'true'
+        run: |
+          IMAGE="$AR_HOST/$PROJECT_ID/${{ vars.GCP_AR_REPO_WEB }}/web:$IMAGE_TAG"
+          docker build -f apps/web/Dockerfile -t "$IMAGE" .
+          docker push "$IMAGE"
+          echo "WEB_IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Deploy web to Cloud Run
+        if: steps.web_dockerfile.outputs.exists == 'true'
+        run: |
+          gcloud run deploy "${{ vars.GCP_RUN_SERVICE_WEB }}" \
+            --project "$PROJECT_ID" \
+            --region "$REGION" \
+            --image "$WEB_IMAGE" \
+            --quiet
+
+      # ----- orchestrator -----
+      - name: Check for orchestrator Dockerfile
+        id: orch_dockerfile
+        run: |
+          if [ -f apps/orchestrator/Dockerfile ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::apps/orchestrator/Dockerfile missing — skipping orchestrator image build/deploy."
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build & push orchestrator image
+        if: steps.orch_dockerfile.outputs.exists == 'true'
+        run: |
+          IMAGE="$AR_HOST/$PROJECT_ID/${{ vars.GCP_AR_REPO_ORCH }}/orchestrator:$IMAGE_TAG"
+          docker build -f apps/orchestrator/Dockerfile -t "$IMAGE" apps/orchestrator
+          docker push "$IMAGE"
+          echo "ORCH_IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Deploy orchestrator to Cloud Run
+        if: steps.orch_dockerfile.outputs.exists == 'true'
+        run: |
+          gcloud run deploy "${{ vars.GCP_RUN_SERVICE_ORCH }}" \
+            --project "$PROJECT_ID" \
+            --region "$REGION" \
+            --image "$ORCH_IMAGE" \
+            --quiet
