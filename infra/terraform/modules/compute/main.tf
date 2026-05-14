@@ -373,7 +373,7 @@ resource "google_pubsub_subscription" "runs_to_orchestrator" {
   }
 
   push_config {
-    push_endpoint = google_cloud_run_v2_service.orchestrator.uri
+    push_endpoint = "${google_cloud_run_v2_service.orchestrator.uri}/pubsub/push"
     oidc_token {
       service_account_email = google_service_account.pubsub_invoker.email
       audience              = google_cloud_run_v2_service.orchestrator.uri
