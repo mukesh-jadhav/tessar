@@ -120,7 +120,13 @@ async def run(run_id: str) -> None:
     try:
         normalized = await asyncio.to_thread(intake_normalize, brief_input, router=router)
     except IntakeNormalizationError as e:
-        log.error("intake_normalizer.failed", run_id=run_id, error=str(e))
+        log.error(
+            "intake_normalizer.failed",
+            run_id=run_id,
+            error=str(e),
+            validation_error=getattr(e, "validation_error", None),
+            raw_text_preview=(getattr(e, "raw_text", "") or "")[:1500],
+        )
         await _mark_failed(run_id)
         await _emit(
             run_id,
@@ -186,7 +192,13 @@ async def run(run_id: str) -> None:
             extract_requirements, brief_input, normalized, router=router
         )
     except RequirementsExtractionError as e:
-        log.error("requirements_extractor.failed", run_id=run_id, error=str(e))
+        log.error(
+            "requirements_extractor.failed",
+            run_id=run_id,
+            error=str(e),
+            validation_error=getattr(e, "validation_error", None),
+            raw_text_preview=(getattr(e, "raw_text", "") or "")[:1500],
+        )
         await _mark_failed(run_id)
         await _emit(
             run_id,
@@ -259,7 +271,13 @@ async def run(run_id: str) -> None:
             plan_research, normalized, requirements, router=router
         )
     except ResearchPlanningError as e:
-        log.error("research_planner.failed", run_id=run_id, error=str(e))
+        log.error(
+            "research_planner.failed",
+            run_id=run_id,
+            error=str(e),
+            validation_error=getattr(e, "validation_error", None),
+            raw_text_preview=(getattr(e, "raw_text", "") or "")[:1500],
+        )
         await _mark_failed(run_id)
         await _emit(
             run_id,
