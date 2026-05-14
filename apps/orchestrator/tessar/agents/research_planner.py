@@ -105,7 +105,7 @@ def plan(
         requirements_json=requirements_json,
     )
 
-    response = router.generate(messages, agent_name=AGENT_NAME, max_tokens=2400, temperature=0.2)
+    response = router.generate(messages, agent_name=AGENT_NAME, max_tokens=8000, temperature=0.2)
     try:
         return _parse(response.text)
     except (ValidationError, json.JSONDecodeError) as first_err:
@@ -122,7 +122,7 @@ def plan(
             ),
         ]
         retry = router.generate(
-            retry_messages, agent_name=AGENT_NAME, max_tokens=2400, temperature=0.2
+            retry_messages, agent_name=AGENT_NAME, max_tokens=8000, temperature=0.2
         )
         try:
             return _parse(retry.text)

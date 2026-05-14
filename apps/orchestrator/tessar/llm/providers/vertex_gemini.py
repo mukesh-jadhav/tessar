@@ -144,19 +144,34 @@ class VertexGeminiProvider(LlmProvider):
         # single prompt with role markers — simple and provider-portable.
         prompt = "\n\n".join(f"<{m.role}>\n{m.content}" for m in messages)
 
+        # Every TESSAR agent emits strict JSON. Force Gemini into
+        # JSON mode so it cannot wrap the response in ```json fences
+        # or surrounding prose. If we later need a non-JSON call,
+        # plumb an opt-out through the router.
+        #
+        # Gemini 2.5 family are THINKING models — hidden reasoning tokens
+        # count against `max_output_tokens` and silently truncate the JSON
+        # body (symptom: "<agent> produced invalid JSON twice" with a
+        # raw_text_preview that ends mid-token). Our agents do their
+        # reasoning in the *prompt*; the model's job is to emit structured
+        # output. Disable thinking outright so the entire token budget is
+        # available for the response.
+        gen_config: dict[str, Any] = {
+            "max_output_tokens": max_tokens,
+            "temperature": temperature,
+            "response_mime_type": "application/json",
+            "thinking_config": {"thinking_budget": 0},
+        }
+
         try:
-            # Every TESSAR agent emits strict JSON. Force Gemini into
-            # JSON mode so it cannot wrap the response in ```json fences
-            # or surrounding prose. If we later need a non-JSON call,
-            # plumb an opt-out through the router.
-            result = model.generate_content(
-                prompt,
-                generation_config={
-                    "max_output_tokens": max_tokens,
-                    "temperature": temperature,
-                    "response_mime_type": "application/json",
-                },
-            )
+            try:
+                result = model.generate_content(prompt, generation_config=gen_config)
+            except TypeError:
+                # Older vertexai SDKs reject `thinking_config` in the dict form.
+                # Retry without it; the bumped max_tokens budget in callers is
+                # the safety net.
+                gen_config.pop("thinking_config", None)
+                result = model.generate_content(prompt, generation_config=gen_config)
         except Exception as e:
             if _classify_error(e):
                 raise TransientProviderError(f"vertex_gemini: {type(e).__name__}: {e}") from e

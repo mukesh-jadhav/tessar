@@ -119,7 +119,7 @@ def extract(
         prompt_md, brief_text=brief.brief, normalized_json=normalized_json
     )
 
-    response = router.generate(messages, agent_name=AGENT_NAME, max_tokens=2400, temperature=0.1)
+    response = router.generate(messages, agent_name=AGENT_NAME, max_tokens=8000, temperature=0.1)
     try:
         return _parse(response.text)
     except (ValidationError, json.JSONDecodeError) as first_err:
@@ -136,7 +136,7 @@ def extract(
             ),
         ]
         retry = router.generate(
-            retry_messages, agent_name=AGENT_NAME, max_tokens=2400, temperature=0.1
+            retry_messages, agent_name=AGENT_NAME, max_tokens=8000, temperature=0.1
         )
         try:
             return _parse(retry.text)

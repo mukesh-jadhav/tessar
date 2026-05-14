@@ -208,7 +208,7 @@ def architect(
     kb_ids = {r.id for r in kb_candidates}
     finding_ids = {f.question_id for f in findings.findings}
 
-    response = router.generate(messages, agent_name=AGENT_NAME, max_tokens=6000, temperature=0.2)
+    response = router.generate(messages, agent_name=AGENT_NAME, max_tokens=16000, temperature=0.2)
 
     first_err: str | None = None
     try:
@@ -235,7 +235,7 @@ def architect(
             ),
         ),
     ]
-    retry = router.generate(retry_messages, agent_name=AGENT_NAME, max_tokens=6000, temperature=0.2)
+    retry = router.generate(retry_messages, agent_name=AGENT_NAME, max_tokens=16000, temperature=0.2)
     try:
         arch = _parse(retry.text)
     except (ValidationError, json.JSONDecodeError) as second_err:

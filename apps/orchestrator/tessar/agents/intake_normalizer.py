@@ -113,7 +113,7 @@ def normalize(brief: BriefInput, *, router: LlmRouter) -> NormalizedBrief:
     guide_json = brief.guide.model_dump_json(exclude_none=True)
     messages = _split_system_user(prompt_md, brief=brief.brief, guide_json=guide_json)
 
-    response = router.generate(messages, agent_name=AGENT_NAME, max_tokens=800, temperature=0.0)
+    response = router.generate(messages, agent_name=AGENT_NAME, max_tokens=2000, temperature=0.0)
     try:
         return _parse(response.text)
     except (ValidationError, json.JSONDecodeError) as first_err:
@@ -131,7 +131,7 @@ def normalize(brief: BriefInput, *, router: LlmRouter) -> NormalizedBrief:
             ),
         ]
         retry = router.generate(
-            retry_messages, agent_name=AGENT_NAME, max_tokens=800, temperature=0.0
+            retry_messages, agent_name=AGENT_NAME, max_tokens=2000, temperature=0.0
         )
         try:
             return _parse(retry.text)

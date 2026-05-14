@@ -186,7 +186,7 @@ def research_one(
         prompt_md, question_json=question_json, citations_json=citations_json
     )
 
-    response = router.generate(messages, agent_name=AGENT_NAME, max_tokens=1800, temperature=0.1)
+    response = router.generate(messages, agent_name=AGENT_NAME, max_tokens=6000, temperature=0.1)
     try:
         return _parse_finding(response.text, expected_id=question.id)
     except (ValidationError, json.JSONDecodeError, ValueError) as first_err:
@@ -204,7 +204,7 @@ def research_one(
             ),
         ]
         retry = router.generate(
-            retry_messages, agent_name=AGENT_NAME, max_tokens=1800, temperature=0.1
+            retry_messages, agent_name=AGENT_NAME, max_tokens=6000, temperature=0.1
         )
         try:
             return _parse_finding(retry.text, expected_id=question.id)

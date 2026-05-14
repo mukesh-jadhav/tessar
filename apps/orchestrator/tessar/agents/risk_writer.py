@@ -223,7 +223,7 @@ def write_risks(
     finding_ids = {f.question_id for f in findings.findings}
     component_ids = _component_id_index(synthesis, architecture)
 
-    response = router.generate(messages, agent_name=AGENT_NAME, max_tokens=5000, temperature=0.3)
+    response = router.generate(messages, agent_name=AGENT_NAME, max_tokens=14000, temperature=0.3)
 
     first_err: str | None = None
     try:
@@ -256,7 +256,7 @@ def write_risks(
             ),
         ),
     ]
-    retry = router.generate(retry_messages, agent_name=AGENT_NAME, max_tokens=5000, temperature=0.3)
+    retry = router.generate(retry_messages, agent_name=AGENT_NAME, max_tokens=14000, temperature=0.3)
     try:
         risks = _parse(retry.text)
     except (ValidationError, json.JSONDecodeError) as second_err:

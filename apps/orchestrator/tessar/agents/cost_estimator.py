@@ -220,7 +220,7 @@ def estimate(
     kb_records = {r.id: r for r in kb_candidates}
     finding_ids = {f.question_id for f in findings.findings}
 
-    response = router.generate(messages, agent_name=AGENT_NAME, max_tokens=3000, temperature=0.1)
+    response = router.generate(messages, agent_name=AGENT_NAME, max_tokens=10000, temperature=0.1)
 
     first_err: str | None = None
     try:
@@ -249,7 +249,7 @@ def estimate(
             ),
         ),
     ]
-    retry = router.generate(retry_messages, agent_name=AGENT_NAME, max_tokens=3000, temperature=0.1)
+    retry = router.generate(retry_messages, agent_name=AGENT_NAME, max_tokens=10000, temperature=0.1)
     try:
         est = _parse(retry.text)
     except (ValidationError, json.JSONDecodeError) as second_err:
