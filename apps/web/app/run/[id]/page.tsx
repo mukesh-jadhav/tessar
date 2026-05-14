@@ -129,7 +129,11 @@ function reduce(state: RunState, ev: ClientEvent): RunState {
         sources: [{ ...ev.payload, t: ev.t }, ...state.sources].slice(0, 30),
       };
     case "metric":
-      return { ...state, metrics: ev.payload };
+      // Merge instead of replace: backend metric events may omit fields
+      // (e.g. `sources`) on phases that didn't change them. A wholesale
+      // replace would make `state.metrics.sources` undefined and crash
+      // the Counter render at the bottom of the page.
+      return { ...state, metrics: { ...state.metrics, ...ev.payload } };
     case "clarify":
       return { ...state, clarify: ev.payload };
     case "done":
@@ -305,9 +309,9 @@ export default function RunPage({
         {/* Bottom action bar */}
         <div className="border-outline-variant/70 bg-surface/85 flex items-center justify-between gap-4 border-t px-6 py-3 backdrop-blur md:px-10">
           <div className="text-on-surface-variant flex items-center gap-3 text-[11.5px]">
-            <Counter label="tokens" value={state.metrics.tokens.toLocaleString()} />
-            <Counter label="cost" value={`$${state.metrics.costUsd.toFixed(2)}`} />
-            <Counter label="sources" value={state.metrics.sources.toString()} />
+            <Counter label="tokens" value={(state.metrics.tokens ?? 0).toLocaleString()} />
+            <Counter label="cost" value={`$${(state.metrics.costUsd ?? 0).toFixed(2)}`} />
+            <Counter label="sources" value={(state.metrics.sources ?? 0).toString()} />
           </div>
           <div className="flex items-center gap-3">
             <span className="text-on-surface-variant text-[11px] tabular-nums">

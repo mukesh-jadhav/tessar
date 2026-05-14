@@ -480,6 +480,7 @@ async def run(run_id: str) -> None:
             "payload": {
                 "tokens": spend.spent_tokens,
                 "costUsd": round(spend.spent_usd, 4),
+                "sources": n_sources,
             },
         },
     )
@@ -565,6 +566,7 @@ async def run(run_id: str) -> None:
             "payload": {
                 "tokens": spend.spent_tokens,
                 "costUsd": round(spend.spent_usd, 4),
+                "sources": n_sources,
             },
         },
     )
@@ -648,6 +650,7 @@ async def run(run_id: str) -> None:
             "payload": {
                 "tokens": spend.spent_tokens,
                 "costUsd": round(spend.spent_usd, 4),
+                "sources": n_sources,
             },
         },
     )
@@ -738,6 +741,7 @@ async def run(run_id: str) -> None:
             "payload": {
                 "tokens": spend.spent_tokens,
                 "costUsd": round(spend.spent_usd, 4),
+                "sources": n_sources,
             },
         },
     )
