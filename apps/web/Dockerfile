@@ -38,6 +38,11 @@ ENV PNPM_HOME=/pnpm \
     CI=1 \
     NEXT_TELEMETRY_DISABLED=1 \
     NEXT_OUTPUT=standalone
+# `prisma generate` probes for libssl to pick the right engine. Without it,
+# it silently falls back to openssl-1.1.x and ignores schema.binaryTargets.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends openssl ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
 RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
 
 WORKDIR /repo
@@ -62,6 +67,11 @@ ENV NODE_ENV=production \
     PORT=8080 \
     HOSTNAME=0.0.0.0
 WORKDIR /app
+
+# libssl3 is what the prisma debian-openssl-3.0.x engine dlopens at runtime.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends openssl ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
 
 # Non-root for Cloud Run hardening.
 RUN groupadd --system --gid 1001 nodejs \
@@ -96,16 +106,19 @@ RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
 
 WORKDIR /repo
 
+# libssl for the prisma migration engine.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends openssl ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
 # Bring in the installed node_modules (incl. prisma CLI) + workspace
-# manifests so pnpm/prisma resolve correctly.
+# manifests so pnpm resolves the @tessar/web filter and prisma binary.
 COPY --from=deps /repo/node_modules ./node_modules
 COPY --from=deps /repo/apps/web/node_modules ./apps/web/node_modules
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY apps/web/package.json ./apps/web/package.json
-# Generated client (libquery_engine for debian-openssl-3.0.x).
-COPY --from=builder /repo/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /repo/apps/web/node_modules/.prisma ./apps/web/node_modules/.prisma
-# Schema + migrations.
+# Schema + migrations. `prisma migrate deploy` only needs these — it does
+# NOT load the generated client, so we don't need to copy .prisma at all.
 COPY apps/web/prisma ./apps/web/prisma
 
 # `prisma migrate deploy` exits non-zero on any failure → Cloud Run Job
