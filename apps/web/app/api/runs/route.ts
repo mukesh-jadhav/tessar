@@ -15,6 +15,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { briefInputSchema, createRun } from "@/lib/runs/create";
+import { enqueueRun } from "@/lib/runs/enqueue";
 import type { RunStatus, RunSummary } from "@/lib/mocks/past-runs";
 
 export const runtime = "nodejs";
@@ -43,6 +44,23 @@ export async function POST(req: Request): Promise<NextResponse> {
 
   try {
     const { runId } = await createRun(parsed.data, session.user.id);
+    // Billing-disabled bypass (ADR-0009): when BILLING_ENABLED!=true,
+    // mark the run paid and enqueue immediately so the brief→run flow
+    // works without going through /checkout. The Stripe webhook path
+    // remains the source of truth in production.
+    if (process.env.BILLING_ENABLED !== "true") {
+      await prisma.run.update({
+        where: { id: runId },
+        data: { paymentStatus: "paid", paidAt: new Date() },
+      });
+      const enq = await enqueueRun(runId);
+      if (!enq.ok) {
+        console.error("[/api/runs] billing-disabled enqueue failed", {
+          runId,
+          reason: enq.reason,
+        });
+      }
+    }
     return NextResponse.json({ runId }, { status: 201 });
   } catch (err) {
     const e = err as { code?: unknown; details?: unknown; message?: string };
