@@ -38,11 +38,16 @@ WORKDIR /app
 # wholesale into the runner stage. Paths are repo-root-relative.
 COPY apps/orchestrator/pyproject.toml apps/orchestrator/README.md ./
 # uv.lock is optional today; copy if present (won't fail if missing
-# thanks to the * pattern).
+# thanks to the * pattern). When the lock matches pyproject we get a
+# reproducible build; when it doesn't we re-resolve so a dep added to
+# pyproject.toml actually lands in the image.
 COPY apps/orchestrator/uv.loc[k] ./
 COPY apps/orchestrator/tessar ./tessar
 
-RUN uv sync --no-dev --frozen 2>/dev/null \
+# `--locked` errors hard if the lock is stale (so we know to fall back),
+# `2>/dev/null` hides the noise. The fallback re-resolves and INSTALLS
+# the new deps even if uv.lock predates the change.
+RUN uv sync --no-dev --locked 2>/dev/null \
  || uv sync --no-dev
 
 # ─── Stage 2: runner ───────────────────────────────────────────────────────
