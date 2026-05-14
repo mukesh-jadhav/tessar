@@ -21,12 +21,11 @@ from __future__ import annotations
 import json
 import re
 from importlib import resources
-from pathlib import Path
-from tessar.paths import repo_root as _repo_root
 
 from pydantic import ValidationError
 
 from tessar.llm import LlmMessage, LlmRouter
+from tessar.paths import repo_root as _repo_root
 from tessar.schemas import BriefInput, NormalizedBrief, Requirements
 
 AGENT_NAME = "requirements_extractor"
@@ -51,8 +50,7 @@ def _load_prompt() -> str:
     rationale (apps/orchestrator/tessar/agents/<file> → parents[4] is
     the repo root).
     """
-    here = Path(__file__).resolve()
-    repo_root = here.parents[4]
+    repo_root = _repo_root()
     prompt_path = repo_root / "packages" / "prompts" / AGENT_NAME / f"{PROMPT_VERSION}.md"
     if not prompt_path.is_file():
         try:
