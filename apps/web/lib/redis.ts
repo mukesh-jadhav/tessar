@@ -23,6 +23,16 @@ declare global {
 
 const URL = process.env.REDIS_URL ?? "redis://127.0.0.1:6379";
 
+// Memorystore (Redis) with transit encryption presents a self-signed CA
+// reachable only on a private IP inside our VPC connector. ioredis can't
+// verify it without the CA bundle, so for `rediss://` we disable name
+// verification — the connection is still encrypted, and the network path
+// itself is private. If we ever expose Redis over the public internet,
+// switch to providing the CA via `tls: { ca }` instead.
+function tlsOptions(url: string): { tls?: { rejectUnauthorized: false } } {
+  return url.startsWith("rediss://") ? { tls: { rejectUnauthorized: false } } : {};
+}
+
 function client(): Redis {
   if (!globalThis.__tessarRedis) {
     globalThis.__tessarRedis = new Redis(URL, {
@@ -30,6 +40,7 @@ function client(): Redis {
       // mask the failure from the SSE handler — let it bubble up.
       maxRetriesPerRequest: 3,
       lazyConnect: false,
+      ...tlsOptions(URL),
     });
     globalThis.__tessarRedis.on("error", (err) => {
       console.warn("[redis] error:", err.message);

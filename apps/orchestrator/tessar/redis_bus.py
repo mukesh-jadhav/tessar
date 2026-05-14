@@ -33,6 +33,19 @@ def _client() -> redis.Redis:
     url = os.environ.get("REDIS_URL", "redis://localhost:6379")
     # decode_responses=True so XRANGE returns str, not bytes — keeps the
     # SSE route in web symmetric (ioredis returns strings by default).
+    #
+    # Memorystore (rediss://) presents a self-signed CA reachable only on
+    # a private IP inside our VPC connector. Without the CA bundle the
+    # client can't verify it, so we disable hostname/cert verification
+    # for `rediss://` only — the connection is still encrypted, and the
+    # network path itself is private. If Redis is ever exposed publicly,
+    # provide the CA via `ssl_ca_certs=...` instead.
+    if url.startswith("rediss://"):
+        return redis.from_url(
+            url,
+            decode_responses=True,
+            ssl_cert_reqs=None,
+        )
     return redis.from_url(url, decode_responses=True)
 
 
