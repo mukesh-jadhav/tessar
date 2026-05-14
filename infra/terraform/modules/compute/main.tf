@@ -240,7 +240,7 @@ resource "google_cloud_run_v2_service" "web" {
         value = tostring(var.redis_port)
       }
       env {
-        name  = "ARTIFACTS_BUCKET"
+        name  = "GCS_BUCKET"
         value = var.artifacts_bucket
       }
       env {
@@ -317,7 +317,7 @@ resource "google_cloud_run_v2_service" "orchestrator" {
         value = tostring(var.redis_port)
       }
       env {
-        name  = "ARTIFACTS_BUCKET"
+        name  = "GCS_BUCKET"
         value = var.artifacts_bucket
       }
       env {
