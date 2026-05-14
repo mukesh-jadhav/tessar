@@ -137,6 +137,7 @@ jobs:
             --region "$REGION" \
             --image "$WEB_IMAGE" \
             --port 8080 \
+            --update-env-vars "GOOGLE_CLOUD_PROJECT=$PROJECT_ID" \
             --quiet
 
       # ----- orchestrator -----
