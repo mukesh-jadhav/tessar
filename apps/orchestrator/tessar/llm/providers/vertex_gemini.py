@@ -145,11 +145,16 @@ class VertexGeminiProvider(LlmProvider):
         prompt = "\n\n".join(f"<{m.role}>\n{m.content}" for m in messages)
 
         try:
+            # Every TESSAR agent emits strict JSON. Force Gemini into
+            # JSON mode so it cannot wrap the response in ```json fences
+            # or surrounding prose. If we later need a non-JSON call,
+            # plumb an opt-out through the router.
             result = model.generate_content(
                 prompt,
                 generation_config={
                     "max_output_tokens": max_tokens,
                     "temperature": temperature,
+                    "response_mime_type": "application/json",
                 },
             )
         except Exception as e:
