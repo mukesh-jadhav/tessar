@@ -155,7 +155,7 @@ jobs:
         if: steps.orch_dockerfile.outputs.exists == 'true'
         run: |
           IMAGE="$AR_HOST/$PROJECT_ID/${{ vars.GCP_AR_REPO_ORCH }}/orchestrator:$IMAGE_TAG"
-          docker build -f apps/orchestrator/Dockerfile -t "$IMAGE" apps/orchestrator
+          docker build -f apps/orchestrator/Dockerfile -t "$IMAGE" .
           docker push "$IMAGE"
           echo "ORCH_IMAGE=$IMAGE" >> "$GITHUB_ENV"
 

@@ -2,9 +2,9 @@
 #
 # apps/orchestrator — FastAPI + LangGraph worker for Cloud Run.
 #
-# Build context = apps/orchestrator/ (note: NOT the repo root — see
-# main.yml deploy job). uv handles the install; the runtime image keeps
-# only the wheels + the package.
+# Build context = REPO ROOT (must — packages/prompts/ and kb-seed/ live
+# there and must be bundled into the image). uv handles the install; the
+# runtime image keeps only the wheels + the package + bundled assets.
 #
 # WeasyPrint pulls in cairo / pango / gdk-pixbuf at runtime, so the
 # runner has those system libs even after we discard the build chain.
@@ -35,12 +35,12 @@ COPY --from=ghcr.io/astral-sh/uv:0.5.6 /uv /uvx /usr/local/bin/
 WORKDIR /app
 
 # Resolve and install into a project-local .venv so we can copy it
-# wholesale into the runner stage.
-COPY pyproject.toml README.md ./
+# wholesale into the runner stage. Paths are repo-root-relative.
+COPY apps/orchestrator/pyproject.toml apps/orchestrator/README.md ./
 # uv.lock is optional today; copy if present (won't fail if missing
 # thanks to the * pattern).
-COPY uv.loc[k] ./
-COPY tessar ./tessar
+COPY apps/orchestrator/uv.loc[k] ./
+COPY apps/orchestrator/tessar ./tessar
 
 RUN uv sync --no-dev --frozen 2>/dev/null \
  || uv sync --no-dev
@@ -79,8 +79,14 @@ RUN groupadd --system --gid 1001 worker \
  && useradd  --system --uid 1001 --gid worker worker
 
 COPY --from=builder --chown=worker:worker /app/.venv ./.venv
-COPY --chown=worker:worker tessar ./tessar
-COPY --chown=worker:worker pyproject.toml README.md ./
+COPY --chown=worker:worker apps/orchestrator/tessar ./tessar
+COPY --chown=worker:worker apps/orchestrator/pyproject.toml apps/orchestrator/README.md ./
+# Bundle non-Python assets the agents read at runtime.
+COPY --chown=worker:worker packages/prompts ./packages/prompts
+COPY --chown=worker:worker kb-seed ./kb-seed
+
+# Tells tessar.paths.repo_root() where to find packages/ and kb-seed/.
+ENV TESSAR_REPO_ROOT=/app
 
 USER worker
 EXPOSE 8080

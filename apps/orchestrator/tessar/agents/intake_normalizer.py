@@ -14,6 +14,7 @@ import json
 import re
 from importlib import resources
 from pathlib import Path
+from tessar.paths import repo_root as _repo_root
 
 from pydantic import ValidationError
 
@@ -43,10 +44,7 @@ def _load_prompt() -> str:
     so we resolve the path relative to the repo root rather than via
     `importlib.resources`.
     """
-    here = Path(__file__).resolve()
-    # apps/orchestrator/tessar/agents/intake_normalizer.py
-    #   parents[0]=agents  [1]=tessar  [2]=orchestrator  [3]=apps  [4]=repo
-    repo_root = here.parents[4]
+    repo_root = _repo_root()
     prompt_path = repo_root / "packages" / "prompts" / AGENT_NAME / f"{PROMPT_VERSION}.md"
     if not prompt_path.is_file():
         # Fall back to importlib.resources in case packaging changes later.

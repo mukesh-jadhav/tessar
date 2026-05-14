@@ -35,9 +35,10 @@ def _stringify_dates(value: Any) -> Any:
 
 
 def _default_kb_dir() -> Path:
-    """Repo-root resolved from this file: kb=0, tessar=1, orchestrator=2,
-    apps=3, repo=4."""
-    return Path(__file__).resolve().parents[4] / "kb-seed" / "components"
+    """Resolved via `tessar.paths.repo_root` (honors TESSAR_REPO_ROOT)."""
+    from tessar.paths import repo_root
+
+    return repo_root() / "kb-seed" / "components"
 
 
 def load_kb(path: Path | None = None) -> list[KbRecord]:

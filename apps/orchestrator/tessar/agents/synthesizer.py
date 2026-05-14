@@ -18,6 +18,7 @@ import json
 import re
 from importlib import resources
 from pathlib import Path
+from tessar.paths import repo_root as _repo_root
 
 from pydantic import ValidationError
 
