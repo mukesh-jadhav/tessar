@@ -207,7 +207,9 @@ def synthesize(
             ),
         ),
     ]
-    retry = router.generate(retry_messages, agent_name=AGENT_NAME, max_tokens=12000, temperature=0.2)
+    retry = router.generate(
+        retry_messages, agent_name=AGENT_NAME, max_tokens=12000, temperature=0.2
+    )
     try:
         synthesis = _parse(retry.text)
     except (ValidationError, json.JSONDecodeError) as second_err:

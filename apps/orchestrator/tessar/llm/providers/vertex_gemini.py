@@ -166,10 +166,14 @@ class VertexGeminiProvider(LlmProvider):
         try:
             try:
                 result = model.generate_content(prompt, generation_config=gen_config)
-            except TypeError:
-                # Older vertexai SDKs reject `thinking_config` in the dict form.
-                # Retry without it; the bumped max_tokens budget in callers is
-                # the safety net.
+            except (TypeError, ValueError) as cfg_err:
+                # Older vertexai SDKs reject `thinking_config` in the dict form
+                # with TypeError; the proto-plus path in v1.71.x raises
+                # `ValueError: Unknown field for GenerationConfig: thinking_config`.
+                # Drop the field and retry; the bumped max_tokens budget in
+                # callers is the safety net.
+                if "thinking_config" not in str(cfg_err):
+                    raise
                 gen_config.pop("thinking_config", None)
                 result = model.generate_content(prompt, generation_config=gen_config)
         except Exception as e:

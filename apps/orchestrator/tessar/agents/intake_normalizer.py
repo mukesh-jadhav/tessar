@@ -13,12 +13,11 @@ from __future__ import annotations
 import json
 import re
 from importlib import resources
-from pathlib import Path
-from tessar.paths import repo_root as _repo_root
 
 from pydantic import ValidationError
 
 from tessar.llm import LlmMessage, LlmRouter
+from tessar.paths import repo_root as _repo_root
 from tessar.schemas import BriefInput, NormalizedBrief
 
 AGENT_NAME = "intake_normalizer"
