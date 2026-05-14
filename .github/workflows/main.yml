@@ -170,5 +170,5 @@ jobs:
             --project "$PROJECT_ID" \
             --region "$REGION" \
             --image "$ORCH_IMAGE" \
-            --update-env-vars "PUBSUB_AUDIENCE=$ORCH_URI,GOOGLE_CLOUD_PROJECT=$PROJECT_ID" \
+            --update-env-vars "PUBSUB_AUDIENCE=$ORCH_URI,GOOGLE_CLOUD_PROJECT=$PROJECT_ID,VERTEX_PROJECT=$PROJECT_ID,VERTEX_LOCATION=us-central1" \
             --quiet

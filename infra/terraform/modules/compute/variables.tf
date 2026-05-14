@@ -13,6 +13,12 @@ variable "env" {
   description = "Environment label, e.g. 'dev' or 'prod'."
 }
 
+variable "vertex_location" {
+  type        = string
+  description = "Vertex AI location for Gemini calls. Must host the configured models (gemini-2.5-pro is available in us-central1, europe-west1/4, asia-southeast1, and the global endpoint — NOT asia-south1)."
+  default     = "us-central1"
+}
+
 variable "vpc_connector_id" {
   type        = string
   description = "Serverless VPC Access connector id (from network module)."

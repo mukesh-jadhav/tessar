@@ -324,6 +324,14 @@ resource "google_cloud_run_v2_service" "orchestrator" {
         name  = "GOOGLE_CLOUD_PROJECT"
         value = var.project_id
       }
+      env {
+        name  = "VERTEX_PROJECT"
+        value = var.project_id
+      }
+      env {
+        name  = "VERTEX_LOCATION"
+        value = var.vertex_location
+      }
       # Note: PUBSUB_AUDIENCE is set out-of-band by the CI deploy step,
       # because it must equal this service's own URI (self-reference would
       # create a Terraform cycle).
