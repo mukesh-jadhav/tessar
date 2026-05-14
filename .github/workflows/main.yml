@@ -136,6 +136,7 @@ jobs:
             --project "$PROJECT_ID" \
             --region "$REGION" \
             --image "$WEB_IMAGE" \
+            --port 8080 \
             --quiet
 
       # ----- orchestrator -----
