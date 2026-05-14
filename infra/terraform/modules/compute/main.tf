@@ -320,6 +320,13 @@ resource "google_cloud_run_v2_service" "orchestrator" {
         name  = "ARTIFACTS_BUCKET"
         value = var.artifacts_bucket
       }
+      env {
+        name  = "GOOGLE_CLOUD_PROJECT"
+        value = var.project_id
+      }
+      # Note: PUBSUB_AUDIENCE is set out-of-band by the CI deploy step,
+      # because it must equal this service's own URI (self-reference would
+      # create a Terraform cycle).
     }
   }
 

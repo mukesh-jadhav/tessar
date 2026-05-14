@@ -162,8 +162,13 @@ jobs:
       - name: Deploy orchestrator to Cloud Run
         if: steps.orch_dockerfile.outputs.exists == 'true'
         run: |
+          # PUBSUB_AUDIENCE must equal the orchestrator's own Cloud Run URI;
+          # we set it out-of-band here because Terraform can't self-reference.
+          ORCH_URI=$(gcloud run services describe "${{ vars.GCP_RUN_SERVICE_ORCH }}" \
+            --project "$PROJECT_ID" --region "$REGION" --format='value(status.url)')
           gcloud run deploy "${{ vars.GCP_RUN_SERVICE_ORCH }}" \
             --project "$PROJECT_ID" \
             --region "$REGION" \
             --image "$ORCH_IMAGE" \
+            --update-env-vars "PUBSUB_AUDIENCE=$ORCH_URI,GOOGLE_CLOUD_PROJECT=$PROJECT_ID" \
             --quiet
