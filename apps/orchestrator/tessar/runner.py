@@ -447,7 +447,13 @@ async def run(run_id: str) -> None:
             router=router,
         )
     except SynthesisError as e:
-        log.error("synthesizer.failed", run_id=run_id, error=str(e))
+        log.error(
+            "synthesizer.failed",
+            run_id=run_id,
+            error=str(e),
+            validation_error=getattr(e, "validation_error", None),
+            raw_text_preview=(getattr(e, "raw_text", "") or "")[:1500],
+        )
         await _mark_failed(run_id)
         await _emit(
             run_id,
@@ -525,7 +531,13 @@ async def run(run_id: str) -> None:
             router=router,
         )
     except ArchitectureError as e:
-        log.error("architect.failed", run_id=run_id, error=str(e))
+        log.error(
+            "architect.failed",
+            run_id=run_id,
+            error=str(e),
+            validation_error=getattr(e, "validation_error", None),
+            raw_text_preview=(getattr(e, "raw_text", "") or "")[:1500],
+        )
         await _mark_failed(run_id)
         await _emit(
             run_id,
@@ -604,7 +616,13 @@ async def run(run_id: str) -> None:
             router=router,
         )
     except CostEstimationError as e:
-        log.error("cost_estimator.failed", run_id=run_id, error=str(e))
+        log.error(
+            "cost_estimator.failed",
+            run_id=run_id,
+            error=str(e),
+            validation_error=getattr(e, "validation_error", None),
+            raw_text_preview=(getattr(e, "raw_text", "") or "")[:1500],
+        )
         await _mark_failed(run_id)
         await _emit(
             run_id,
@@ -687,7 +705,13 @@ async def run(run_id: str) -> None:
             router=router,
         )
     except RiskWritingError as e:
-        log.error("risk_writer.failed", run_id=run_id, error=str(e))
+        log.error(
+            "risk_writer.failed",
+            run_id=run_id,
+            error=str(e),
+            validation_error=getattr(e, "validation_error", None),
+            raw_text_preview=(getattr(e, "raw_text", "") or "")[:1500],
+        )
         await _mark_failed(run_id)
         await _emit(
             run_id,
