@@ -79,8 +79,8 @@ export default async function DecideRunPage({
       meta={{
         runId: id,
         runLabel: `Run · ${id.slice(0, 7)}`,
-        mdHref: hasMd ? `/api/runs/${id}/artifact/md` : undefined,
-        pdfHref: hasPdf ? `/api/runs/${id}/artifact/pdf` : undefined,
+        mdHref: hasMd ? `/api/runs/${id}/artifact/package_md` : undefined,
+        pdfHref: hasPdf ? `/api/runs/${id}/artifact/package_pdf` : undefined,
       }}
     />
   );

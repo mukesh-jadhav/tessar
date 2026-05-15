@@ -3026,7 +3026,8 @@ function BriefField({ label, value }: { label: string; value: string }): React.R
  */
 function DownloadCTA(): React.ReactElement {
   const meta = useDecideRun();
-  const href = meta.pdfHref ?? (meta.runId ? `/api/runs/${meta.runId}/artifact/pdf` : undefined);
+  const href =
+    meta.pdfHref ?? (meta.runId ? `/api/runs/${meta.runId}/artifact/package_pdf` : undefined);
   const tag = href ? motion.a : motion.button;
   const tagProps = href
     ? ({ href, target: "_blank", rel: "noopener" } as const)
@@ -4434,8 +4435,10 @@ function PackageLens(): React.ReactElement {
           Deliverable preview · PDF + Markdown
         </span>
         {(() => {
-          const pdf = meta.pdfHref ?? (meta.runId ? `/api/runs/${meta.runId}/artifact/pdf` : null);
-          const md = meta.mdHref ?? (meta.runId ? `/api/runs/${meta.runId}/artifact/md` : null);
+          const pdf =
+            meta.pdfHref ?? (meta.runId ? `/api/runs/${meta.runId}/artifact/package_pdf` : null);
+          const md =
+            meta.mdHref ?? (meta.runId ? `/api/runs/${meta.runId}/artifact/package_md` : null);
           if (!pdf && !md) {
             return (
               <Button variant="filled" size="sm">
