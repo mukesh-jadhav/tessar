@@ -318,7 +318,17 @@ export default function RunPage({
               {progressPct}% · {fmtMs(elapsed)}
             </span>
             {state.done ? (
-              <DownloadButtons md={artifacts.md} pdf={artifacts.pdf} />
+              <div className="flex items-center gap-2">
+                <Link href={`/run/${id}/package`} aria-label="Open the design package">
+                  <Button
+                    variant="filled"
+                    className="gap-2 rounded-full px-5 py-2 text-[12.5px] font-semibold"
+                  >
+                    Open the package <span aria-hidden>→</span>
+                  </Button>
+                </Link>
+                <DownloadButtons md={artifacts.md} pdf={artifacts.pdf} />
+              </div>
             ) : (
               <Button
                 disabled
@@ -362,18 +372,19 @@ function DownloadButtons({ md, pdf }: { md?: string; pdf?: string }): React.Reac
       {md ? (
         <a href={md} download>
           <Button
-            variant={pdf ? "tonal" : "filled"}
-            className="gap-2 rounded-full px-4 py-2 text-[12.5px] font-semibold"
+            variant="text"
+            className="gap-2 rounded-full px-3 py-2 text-[12.5px] font-medium"
             aria-label="Download the design package as Markdown"
           >
-            Markdown <span aria-hidden>↓</span>
+            MD <span aria-hidden>↓</span>
           </Button>
         </a>
       ) : null}
       {pdf ? (
         <a href={pdf} download>
           <Button
-            className="gap-2 rounded-full px-4 py-2 text-[12.5px] font-semibold"
+            variant="tonal"
+            className="gap-2 rounded-full px-3 py-2 text-[12.5px] font-medium"
             aria-label="Download the design package as PDF"
           >
             PDF <span aria-hidden>↓</span>
