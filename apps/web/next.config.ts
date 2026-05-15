@@ -20,4 +20,31 @@ const config: NextConfig = {
   ],
 };
 
-export default config;
+// Phase 4.2: wrap with Sentry's plugin only when SENTRY_DSN is set.
+// The plugin injects source-map upload + tunneling. Without DSN, return
+// the plain config so local dev / CI without Sentry creds stay green.
+//
+// Next 15 supports an async default export for next.config.ts.
+export default async function nextConfig(): Promise<NextConfig> {
+  if (!process.env.SENTRY_DSN?.trim()) {
+    return config;
+  }
+  const { withSentryConfig } = await import("@sentry/nextjs");
+  return withSentryConfig(config, {
+    org: process.env.SENTRY_ORG,
+    project: process.env.SENTRY_PROJECT,
+    authToken: process.env.SENTRY_AUTH_TOKEN,
+    silent: !process.env.CI,
+    // Disables the "ad-blocker bypass" tunnel route — we don't need it
+    // for an admin-only dev deploy and it adds an authenticated path.
+    tunnelRoute: undefined,
+    disableLogger: true,
+    // Source-map upload requires SENTRY_AUTH_TOKEN; skip it when missing
+    // so PR builds without the token still succeed. Browser source maps
+    // are off by default in Next — server source maps still ship to
+    // Sentry when the auth token is set.
+    sourcemaps: {
+      disable: !process.env.SENTRY_AUTH_TOKEN,
+    },
+  });
+}

@@ -51,6 +51,10 @@ resource "google_service_account" "pubsub_invoker" {
 }
 
 # Web SA: read app secrets + use Cloud SQL.
+# Sentry DSN secrets (`sentry-dsn-web`, `sentry-dsn-worker`) are provisioned
+# manually via gcloud (see docs/adr/0010). They are added here so the runtime
+# SAs can read them once they exist; if a referenced secret is absent, apply
+# will fail until it is created.
 locals {
   web_secret_ids = [
     var.db_password_secret_id,
@@ -59,11 +63,13 @@ locals {
     "google-oauth-client-id",
     "google-oauth-client-secret",
     "resend-api-key",
+    "sentry-dsn-web",
   ]
 
   orchestrator_secret_ids = [
     var.db_password_secret_id,
     var.redis_auth_secret_id,
+    "sentry-dsn-worker",
   ]
 }
 
@@ -124,6 +130,22 @@ resource "google_storage_bucket_iam_member" "orchestrator_briefs_reader" {
 resource "google_project_iam_member" "orchestrator_vertex_user" {
   project = var.project_id
   role    = "roles/aiplatform.user"
+  member  = "serviceAccount:${google_service_account.orchestrator.email}"
+}
+
+# Phase 4.2 — Cloud Trace export. Both runtimes ship OTEL spans to Cloud
+# Trace via the GCP exporter, which authenticates with ADC. Requires
+# `cloudtrace.googleapis.com` to be enabled on the project (assumed
+# pre-enabled along with the other core APIs).
+resource "google_project_iam_member" "web_cloudtrace_agent" {
+  project = var.project_id
+  role    = "roles/cloudtrace.agent"
+  member  = "serviceAccount:${google_service_account.web.email}"
+}
+
+resource "google_project_iam_member" "orchestrator_cloudtrace_agent" {
+  project = var.project_id
+  role    = "roles/cloudtrace.agent"
   member  = "serviceAccount:${google_service_account.orchestrator.email}"
 }
 

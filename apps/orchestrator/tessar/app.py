@@ -25,11 +25,21 @@ from google.oauth2 import id_token
 from pydantic import BaseModel, Field
 
 from tessar.config import settings
+from tessar.observability import (
+    capture_exception,
+    init_observability,
+    instrument_fastapi_app,
+)
 from tessar.runner import run as run_job
 
 log = structlog.get_logger(__name__)
 
+# Initialise Sentry + OTEL before the FastAPI app is constructed so the
+# auto-instrumentation can patch ASGI middleware in the right order.
+init_observability("tessar-orchestrator")
+
 app = FastAPI(title="tessar-orchestrator", version="0.1.0")
+instrument_fastapi_app(app)
 
 
 # ─── Health ─────────────────────────────────────────────────────────────────
@@ -85,12 +95,18 @@ async def pubsub_push(req: Request) -> None:
         return
 
     log.info("run.received", run_id=payload.runId, user_id=payload.userId)
-    try:
-        await run_job(payload.runId)
-    except Exception as exc:
-        log.exception("run.failed", run_id=payload.runId, error=str(exc))
-        # 5xx → Pub/Sub redelivers (up to maxDeliveryAttempts → DLQ).
-        raise HTTPException(status_code=500, detail="run_failed") from exc
+    tracer = get_tracer("tessar.app")
+    with tracer.start_as_current_span("tessar.run") as span:
+        span.set_attribute("run.id", payload.runId)
+        span.set_attribute("run.user_id", payload.userId)
+        try:
+            await run_job(payload.runId)
+        except Exception as exc:
+            log.exception("run.failed", run_id=payload.runId, error=str(exc))
+            span.record_exception(exc)
+            capture_exception(exc, run_id=payload.runId, user_id=payload.userId)
+            # 5xx → Pub/Sub redelivers (up to maxDeliveryAttempts → DLQ).
+            raise HTTPException(status_code=500, detail="run_failed") from exc
 
 
 # ─── OIDC verification ──────────────────────────────────────────────────────

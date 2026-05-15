@@ -24,6 +24,15 @@ dependencies = [
     "markdown>=3.7",
     "weasyprint>=63.0",
     "pyyaml>=6.0",
+    # Observability (Phase 4.2). All three are optional at runtime — they
+    # only activate when SENTRY_DSN / OTEL_ENABLED env vars are set, see
+    # tessar/observability.py.
+    "sentry-sdk[fastapi]>=2.18.0",
+    "opentelemetry-api>=1.28.0",
+    "opentelemetry-sdk>=1.28.0",
+    "opentelemetry-exporter-gcp-trace>=1.7.0",
+    "opentelemetry-instrumentation-fastapi>=0.49b0",
+    "opentelemetry-instrumentation-asyncpg>=0.49b0",
 ]
 
 [dependency-groups]
