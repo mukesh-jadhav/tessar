@@ -42,6 +42,7 @@ evals/
 - Judge axes (3, 4, 6) wired through the LLM router (Phase 3.2 dependency).
 - Nightly GitHub Actions workflow running the full suite against `dev`.
 - PR gate (auto-axes only) wired into `pr.yml`.
+- **ADR-0006 narrative graders** (5 new judge prompts; coherence + grounding for `sequenceDiagrams`, `integrationContracts`, `componentRationales`, `failureModes`, `buildSequence`). Bar must absorb these before paid checkout flips on in prod.
 
 ## Run locally
 

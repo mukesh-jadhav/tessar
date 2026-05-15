@@ -132,6 +132,60 @@ export interface RoadmapItem {
   body: string;
 }
 
+// ─── ADR-0006: System-design narrative ──────────────────────────────────────
+// Required at MVP launch (see docs/adr/0006-...). Optional in this web mirror
+// so Phase 1/2 mock packages don't need to be backfilled during the prototype
+// phase. Phase 3 architect agent must populate all five.
+
+export interface SequenceDiagram {
+  id: string;
+  kind: "write" | "read" | "async";
+  title: string;
+  summary: string;
+  /** Mermaid sequenceDiagram source. */
+  mermaid: string;
+  /** ArchNode IDs participating, in causal order. */
+  participants: string[];
+}
+
+export interface IntegrationContract {
+  edgeId: string;
+  from: string;
+  to: string;
+  mode: "sync" | "async";
+  payload: string;
+  idempotency: string;
+  retry: string;
+  semantics: "at-least-once" | "exactly-once" | "best-effort";
+  cite: number;
+}
+
+export interface ComponentRationale {
+  nodeId: string;
+  requirementId: string;
+  narrative: string;
+  cite: number;
+}
+
+export interface FailureMode {
+  id: string;
+  nodeId: string;
+  mode: string;
+  detection: string;
+  recovery: string;
+  rto: string;
+  rpo: string;
+  cite: number;
+}
+
+export interface BuildPhase {
+  id: string;
+  label: string;
+  title: string;
+  nodes: string[];
+  rationale: string;
+}
+
 export interface RunPackage {
   id: string;
   generatedAt: string;
@@ -147,5 +201,11 @@ export interface RunPackage {
   risks: Risk[];
   roadmap: RoadmapItem[];
   flowNarrative: FlowStep[];
+  // ADR-0006 — optional during prototype, required at MVP launch.
+  sequenceDiagrams?: SequenceDiagram[];
+  integrationContracts?: IntegrationContract[];
+  componentRationales?: ComponentRationale[];
+  failureModes?: FailureMode[];
+  buildSequence?: BuildPhase[];
   sources: Source[];
 }

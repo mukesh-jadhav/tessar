@@ -24,11 +24,7 @@
 
 export type Zone = "client" | "edge" | "app" | "data" | "external";
 
-export type DataClass =
-  | "public"
-  | "internal"
-  | "confidential"
-  | "regulated";
+export type DataClass = "public" | "internal" | "confidential" | "regulated";
 
 /** Forward-compatible icon token; UI falls back to a generic glyph. */
 export type IconName = string;
@@ -141,12 +137,7 @@ export interface Decision {
 
 // ─── Bill of materials ──────────────────────────────────────────
 
-export type BomKind =
-  | "compute"
-  | "data"
-  | "storage"
-  | "network"
-  | "vendor";
+export type BomKind = "compute" | "data" | "storage" | "network" | "vendor";
 
 export interface BomLine {
   id: string;
@@ -230,6 +221,87 @@ export interface RoadmapItem {
   body: string;
 }
 
+// ─── ADR-0006: System-design narrative ─────────────────────────
+
+/** One sequence diagram. Architect emits exactly three per package:
+ *  the write path, the read path, and one critical async/admin path. */
+export interface SequenceDiagram {
+  id: string;
+  /** Which canonical path this diagram covers. */
+  kind: "write" | "read" | "async";
+  title: string;
+  /** 1–2 sentence summary of what this path does and why it matters. */
+  summary: string;
+  /** Mermaid `sequenceDiagram` source. Rendered server-side via mermaid-cli. */
+  mermaid: string;
+  /** ArchNode IDs participating in this path, in causal order. */
+  participants: string[];
+}
+
+/** Integration contract for one critical edge in the architecture.
+ *  Architect emits one per ArchEdge it marks as critical. */
+export interface IntegrationContract {
+  /** ArchEdge identifier: "<from>→<to>". */
+  edgeId: string;
+  from: string;
+  to: string;
+  /** Synchronous (request/response) vs asynchronous (event/queue). */
+  mode: "sync" | "async";
+  /** Wire shape — JSON shape sketch, RPC signature, or message schema name. */
+  payload: string;
+  /** Idempotency strategy: "idempotency-key header", "dedupe by event_id", etc. */
+  idempotency: string;
+  /** Retry policy: "exponential backoff, 5 attempts, jitter" etc. */
+  retry: string;
+  /** Failure semantics: "at-least-once", "exactly-once", "best-effort". */
+  semantics: "at-least-once" | "exactly-once" | "best-effort";
+  cite: number;
+}
+
+/** "Fits because" rationale linking a critical component pick to the
+ *  specific requirement it satisfies. Stronger than ArchNode.why because
+ *  it explicitly references the requirement id it answers. */
+export interface ComponentRationale {
+  nodeId: string;
+  /** Requirement.id this pick directly satisfies. */
+  requirementId: string;
+  /** 2–3 sentences. Validated by Pydantic for length + grounding. */
+  narrative: string;
+  cite: number;
+}
+
+/** One row in the failure-modes table. Architect emits one per ArchNode
+ *  with `failureDomain.length > 0`. */
+export interface FailureMode {
+  id: string;
+  nodeId: string;
+  /** Likely failure mode ("connection pool exhaustion", "region outage"). */
+  mode: string;
+  /** What signal exposes this failure ("5xx spike", "queue depth alarm"). */
+  detection: string;
+  /** Concrete recovery action, ≤ 3 sentences. */
+  recovery: string;
+  /** Recovery time objective ("< 5 min", "< 1 h"). */
+  rto: string;
+  /** Recovery point objective ("0 (sync repl)", "≤ 15 min (PITR)"). */
+  rpo: string;
+  cite: number;
+}
+
+/** One phase in the engineering build sequence. Distinct from RoadmapItem
+ *  (which is product roadmap); this is what to stand up first to make
+ *  the recommended architecture real. Architect emits 3–6 phases. */
+export interface BuildPhase {
+  id: string;
+  /** Display label ("Week 1", "Week 2–3", "Month 2"). */
+  label: string;
+  title: string;
+  /** ArchNode IDs to stand up in this phase, in dependency order. */
+  nodes: string[];
+  /** Why this phase first; what's blocked until it ships. */
+  rationale: string;
+}
+
 // ─── Top-level run package ──────────────────────────────────────
 
 /** Complete contract emitted by the orchestrator's `packager` node.
@@ -261,6 +333,15 @@ export interface RunPackage {
 
   /** ADR-0004 — narrated request lifecycle, 6–8 steps. */
   flowNarrative: FlowStep[];
+
+  /** ADR-0006 — system-design narrative. The architect agent fills these
+   *  to make the package read like a designed system, not just described.
+   *  All five are required at MVP; eval graders enforce coherence + grounding. */
+  sequenceDiagrams: SequenceDiagram[];
+  integrationContracts: IntegrationContract[];
+  componentRationales: ComponentRationale[];
+  failureModes: FailureMode[];
+  buildSequence: BuildPhase[];
 
   /** Citations referenced by `cite` fields above. */
   sources: Source[];

@@ -16,16 +16,21 @@
 6. **Architecture generator** producing:
    - C4 Context + Container diagrams
    - Data flow diagram
-   - One sequence diagram for the primary user journey
+   - **Three sequence diagrams** (write path, read path, one critical async/admin path) — see ADR-0006
    - All as **Mermaid** (rendered to SVG/PNG)
-7. **Trade-off / ADR generator** (one ADR per major decision).
-8. **Cost estimator** (launch + 10× scale).
-9. **Design package output**: Executive Summary, Requirements, Diagrams, BOM, Trade-offs, Cost Model, Risk Register, Build Plan, Citations.
-10. **Markdown + PDF export**.
-11. **Pay-per-run checkout** (Stripe, single tier).
-12. **Single-user accounts** (email magic link + Google OAuth via Auth.js).
-13. **Run history & view-past-runs**.
-14. **Eval harness** (internal, gates releases).
+7. **System-design narrative** (ADR-0006), produced by an enhanced architect + synthesizer:
+   - **Integration contracts** per critical edge (message/RPC shape, sync vs async, idempotency, retry policy)
+   - **"Fits because" component rationale** linking each critical pick to a specific requirement and citation
+   - **Failure-modes table** per critical component (failure → detection → recovery → RTO/RPO)
+   - **Phased build sequence** (week-1 / week-2 / week-3 ordering of what to stand up first and why)
+8. **Trade-off / ADR generator** (one ADR per major decision).
+9. **Cost estimator** (launch + 10× scale).
+10. **Design package output**: Executive Summary, Requirements, Diagrams, BOM, Trade-offs, Cost Model, Risk Register, Build Plan, Citations, **How-this-fits-together (system-design narrative)**.
+11. **Markdown + PDF export**.
+12. **Pay-per-run checkout** (Stripe, single tier).
+13. **Single-user accounts** (email magic link + Google OAuth via Auth.js).
+14. **Run history & view-past-runs**.
+15. **Eval harness** (internal, gates releases) — includes graders for the five new ADR-0006 narrative sections.
 
 ### 1.2 Recommendation Cloud Coverage
 
@@ -143,7 +148,7 @@ Shared infra: Cloud SQL for PostgreSQL, Memorystore for Redis, Pub/Sub, Cloud St
 
 > Why two services and not one? The Node ecosystem is best for the SPA + auth + Stripe + SSE; the Python ecosystem is best for LangGraph + LLM SDKs. A clean split now avoids a painful split later.
 
-### 3.3 Why Pub/Sub *and* Redis (not just one)
+### 3.3 Why Pub/Sub _and_ Redis (not just one)
 
 - **Pub/Sub** = durable, at-least-once messaging with built-in retries, exponential backoff, and **dead-letter topics**. Used to hand a run from web → worker; integrates natively with Cloud Run **push subscriptions** (no polling, no KEDA needed).
 - **Memorystore Redis** = low-latency Streams/pub-sub for **progress events** (worker → web SSE). Pub/Sub would also work but is optimized for back-end fan-out, not millisecond UI streaming; Redis Streams give us a cheap, replayable event log for the live UI.
@@ -232,38 +237,38 @@ Curation: seeded by hand + LLM-drafted then human-verified. Re-verification job 
 
 ## 4. Component Choices (the TESSAR stack on GCP)
 
-| Layer | Choice | Why |
-|---|---|---|
-| Frontend framework | **Next.js 15 (App Router) + React + TypeScript** | SSR, SSE-friendly, ecosystem, fast iteration |
-| UI kit | **Tailwind CSS + shadcn/ui** | Fast, accessible, no design-system overhead |
-| Diagram rendering | **Mermaid** (client) + **mermaid-cli (mmdc)** in worker for SVG/PNG | Standard, text-based, diff-friendly |
-| Auth | **Auth.js (NextAuth)** with email magic link + Google | Minimal infra; **Identity Platform** added later for enterprise SSO |
-| Payments | **Stripe Checkout + Webhooks** | Pay-per-run is a one-shot Checkout session |
-| API style | **Next.js Route Handlers** + SSE for streaming | One codebase for FE+BFF |
-| Orchestrator | **Python 3.12 + LangGraph + Pydantic** | Best agent tooling, typed graph state |
-| LLM (primary) | **Vertex AI — Gemini** (frontier + flash + nano tiers) | Native to GCP, IAM-based auth, Founders Hub credits, regional control |
-| LLM (fallback) | **Anthropic Claude on Vertex AI** (same SDK, same IAM); **OpenAI direct** as last-resort fallback | Single vendor surface for two providers; OpenAI direct only if both Vertex paths are down |
-| Embeddings | **Vertex AI `text-embedding-005`** (or successor) | Single vendor + region for vectors |
-| Web search | **Tavily** (primary) + **Brave Search** (fallback) | Built for LLM agents, cite-friendly, cloud-neutral |
-| Scrape/snapshot | **Trafilatura** + **Playwright** for JS-heavy pages | Clean text extraction, full snapshot for citation |
-| Job queue (durable) | **Pub/Sub** topic `tessar-runs` with **push subscription** to orchestrator + dead-letter topic | Zero-ops, native Cloud Run integration, at-least-once with retries |
-| Event stream (live UI) | **Memorystore for Redis** (Basic, 1 GB) | Streams + pub/sub for SSE fan-out |
-| In-process scheduling | **arq** (Python, on Redis) for sub-tasks within a run | Lightweight intra-worker orchestration |
-| Primary DB | **Cloud SQL for PostgreSQL 16** with **pgvector** | One DB for relational + vectors at MVP scale |
-| Object storage | **Cloud Storage** (Standard class, lifecycle to Nearline/Coldline) | Standard for artifacts |
-| Secrets | **Secret Manager** (accessed via per-service account, no static creds) | Native, audit-logged, no secrets in env files |
-| PDF rendering | **WeasyPrint** (Python) from MD→HTML→PDF | Reliable, no headless-Chrome cost |
-| Markdown pipeline | **markdown-it** (web) / **markdown-it-py** (worker) | Consistent rendering both sides |
-| Cost data | **GCP Cloud Billing Catalog API + Pricing Calculator data** (primary) + **AWS Pricing API** & **Azure Retail Prices API** (secondary) + curated SaaS catalog in KB | Authoritative for primary cloud, comparison for others |
-| Edge / CDN / WAF | **Global External HTTPS Load Balancer + Cloud CDN + Cloud Armor** | TLS, WAF (managed OWASP rules), edge caching, custom domains |
-| DNS | **Cloud DNS** | Native, scriptable in Terraform |
-| Observability | **OpenTelemetry SDK** → **Cloud Trace + Cloud Logging + Cloud Monitoring** + **Grafana Cloud** dashboards (Cloud Monitoring exporter) + **Sentry** | Cloud Ops native to GCP; Sentry for UX errors |
-| Feature flags + analytics | **PostHog** (cloud) | Free tier sufficient for MVP, cloud-neutral |
-| Email (transactional) | **Resend** | Simple API, good deliverability |
-| Eval harness | Python pytest + **promptfoo** | Lightweight, CI-native |
-| CI/CD | **GitHub Actions** with **Workload Identity Federation** to GCP | No static cloud secrets in GH |
-| IaC | **Terraform** (Google provider) | Mature, multi-cloud-portable; matches what we recommend |
-| Container registry | **Artifact Registry** (Docker repo) | Native to Cloud Run, regional |
+| Layer                     | Choice                                                                                                                                                             | Why                                                                                       |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| Frontend framework        | **Next.js 15 (App Router) + React + TypeScript**                                                                                                                   | SSR, SSE-friendly, ecosystem, fast iteration                                              |
+| UI kit                    | **Tailwind CSS + shadcn/ui**                                                                                                                                       | Fast, accessible, no design-system overhead                                               |
+| Diagram rendering         | **Mermaid** (client) + **mermaid-cli (mmdc)** in worker for SVG/PNG                                                                                                | Standard, text-based, diff-friendly                                                       |
+| Auth                      | **Auth.js (NextAuth)** with email magic link + Google                                                                                                              | Minimal infra; **Identity Platform** added later for enterprise SSO                       |
+| Payments                  | **Stripe Checkout + Webhooks**                                                                                                                                     | Pay-per-run is a one-shot Checkout session                                                |
+| API style                 | **Next.js Route Handlers** + SSE for streaming                                                                                                                     | One codebase for FE+BFF                                                                   |
+| Orchestrator              | **Python 3.12 + LangGraph + Pydantic**                                                                                                                             | Best agent tooling, typed graph state                                                     |
+| LLM (primary)             | **Vertex AI — Gemini** (frontier + flash + nano tiers)                                                                                                             | Native to GCP, IAM-based auth, Founders Hub credits, regional control                     |
+| LLM (fallback)            | **Anthropic Claude on Vertex AI** (same SDK, same IAM); **OpenAI direct** as last-resort fallback                                                                  | Single vendor surface for two providers; OpenAI direct only if both Vertex paths are down |
+| Embeddings                | **Vertex AI `text-embedding-005`** (or successor)                                                                                                                  | Single vendor + region for vectors                                                        |
+| Web search                | **Tavily** (primary) + **Brave Search** (fallback)                                                                                                                 | Built for LLM agents, cite-friendly, cloud-neutral                                        |
+| Scrape/snapshot           | **Trafilatura** + **Playwright** for JS-heavy pages                                                                                                                | Clean text extraction, full snapshot for citation                                         |
+| Job queue (durable)       | **Pub/Sub** topic `tessar-runs` with **push subscription** to orchestrator + dead-letter topic                                                                     | Zero-ops, native Cloud Run integration, at-least-once with retries                        |
+| Event stream (live UI)    | **Memorystore for Redis** (Basic, 1 GB)                                                                                                                            | Streams + pub/sub for SSE fan-out                                                         |
+| In-process scheduling     | **arq** (Python, on Redis) for sub-tasks within a run                                                                                                              | Lightweight intra-worker orchestration                                                    |
+| Primary DB                | **Cloud SQL for PostgreSQL 16** with **pgvector**                                                                                                                  | One DB for relational + vectors at MVP scale                                              |
+| Object storage            | **Cloud Storage** (Standard class, lifecycle to Nearline/Coldline)                                                                                                 | Standard for artifacts                                                                    |
+| Secrets                   | **Secret Manager** (accessed via per-service account, no static creds)                                                                                             | Native, audit-logged, no secrets in env files                                             |
+| PDF rendering             | **WeasyPrint** (Python) from MD→HTML→PDF                                                                                                                           | Reliable, no headless-Chrome cost                                                         |
+| Markdown pipeline         | **markdown-it** (web) / **markdown-it-py** (worker)                                                                                                                | Consistent rendering both sides                                                           |
+| Cost data                 | **GCP Cloud Billing Catalog API + Pricing Calculator data** (primary) + **AWS Pricing API** & **Azure Retail Prices API** (secondary) + curated SaaS catalog in KB | Authoritative for primary cloud, comparison for others                                    |
+| Edge / CDN / WAF          | **Global External HTTPS Load Balancer + Cloud CDN + Cloud Armor**                                                                                                  | TLS, WAF (managed OWASP rules), edge caching, custom domains                              |
+| DNS                       | **Cloud DNS**                                                                                                                                                      | Native, scriptable in Terraform                                                           |
+| Observability             | **OpenTelemetry SDK** → **Cloud Trace + Cloud Logging + Cloud Monitoring** + **Grafana Cloud** dashboards (Cloud Monitoring exporter) + **Sentry**                 | Cloud Ops native to GCP; Sentry for UX errors                                             |
+| Feature flags + analytics | **PostHog** (cloud)                                                                                                                                                | Free tier sufficient for MVP, cloud-neutral                                               |
+| Email (transactional)     | **Resend**                                                                                                                                                         | Simple API, good deliverability                                                           |
+| Eval harness              | Python pytest + **promptfoo**                                                                                                                                      | Lightweight, CI-native                                                                    |
+| CI/CD                     | **GitHub Actions** with **Workload Identity Federation** to GCP                                                                                                    | No static cloud secrets in GH                                                             |
+| IaC                       | **Terraform** (Google provider)                                                                                                                                    | Mature, multi-cloud-portable; matches what we recommend                                   |
+| Container registry        | **Artifact Registry** (Docker repo)                                                                                                                                | Native to Cloud Run, regional                                                             |
 
 ### 4.1 LLM Cost & Routing Strategy
 
@@ -296,6 +301,7 @@ For MVP we need email magic link + Google OAuth. Auth.js gives both with no GCP-
 - **`tessar-orchestrator`** → **Cloud Run service** as the **target of a Pub/Sub push subscription**. **Concurrency = 1** per instance (one run at a time per container) so LangGraph state is isolated; min = 0, max = N. Request timeout raised to 60 minutes (Cloud Run supports up to 60 min for HTTP). Long runs that exceed this fall back to **Cloud Run Jobs** (rare; v1.x).
 
 > **Why Cloud Run over GKE Autopilot or Compute Engine?**
+>
 > - **GKE Autopilot** is overkill for two services and adds full Kubernetes operational burden.
 > - **Compute Engine** means we own the OS, scaling, and patching.
 > - **Cloud Run** hits the sweet spot: true scale-to-zero (or min=1 when needed), per-100ms billing, native Pub/Sub integration, fast deploys via gcloud or Terraform, OIDC to GitHub Actions out of the box.
@@ -453,10 +459,10 @@ tessar/
 
 ## 8. Definition of Done for MVP
 
-- A signed-in user can describe a SaaS web app idea, pay once, and receive within ~15 minutes a downloadable PDF + Markdown design package containing: requirements, C4 + data flow + one sequence diagram, BOM with citations, ADRs for top decisions, **GCP** cost estimate at launch and 10× scale (with AWS and Azure equivalents listed but not fully costed), risk register, build plan.
-- Every component pick traces to a KB record or cited source.
-- Eval score on golden briefs ≥ agreed threshold; no regression in last 7 nightly runs.
-- Median per-run gross margin ≥ target (price − LLM/search/infra variable cost).
+- A signed-in user can describe a SaaS web app idea, pay once, and receive within ~15 minutes a downloadable PDF + Markdown design package containing: requirements, C4 + data flow + **three** sequence diagrams (write/read/async), BOM with citations, ADRs for top decisions, **GCP** cost estimate at launch and 10× scale (with AWS and Azure equivalents listed but not fully costed), risk register, build plan, **and the ADR-0006 system-design narrative (integration contracts, component rationale, failure modes, phased build sequence)**.
+- Every component pick traces to a KB record or cited source; every "fits because" rationale references the specific requirement it satisfies.
+- Eval score on golden briefs ≥ agreed threshold; no regression in last 7 nightly runs. Eval harness includes graders for each of the five ADR-0006 narrative sections.
+- Median per-run gross margin ≥ target (price − LLM/search/infra variable cost). Per-run LLM budget cap raised ~30% over original MVP estimate to accommodate the richer architect + synthesizer output (see §5.7).
 - Cloud SQL backups restore-tested; runbook for stuck Pub/Sub backlog, LLM provider outage, Stripe webhook replay exists.
 - Security baseline (§5.8) verified by checklist; no high-severity issues open.
 
@@ -464,25 +470,25 @@ tessar/
 
 ## 9. Decisions Locked
 
-| Decision | Choice | Notes |
-|---|---|---|
-| Cloud for TESSAR itself | **Google Cloud (GCP)** | Cloud Run DX, Vertex AI for Gemini + Claude in one SDK, Google for Startups credits |
-| Web hosting | **Cloud Run** (not Vercel, not GKE) | Private networking to Cloud SQL/Memorystore via Serverless VPC Connector, single-cloud billing & IAM |
-| Worker hosting | **Cloud Run** with Pub/Sub push subscription | Zero-ops, native scaling, no KEDA |
-| Anchor recommendation cloud | **GCP first; AWS + Azure secondary** | Dogfood + acknowledge both alternatives are common |
-| Frontier LLM default | **Vertex AI Gemini** primary, **Claude on Vertex** fallback, **OpenAI direct** last-resort | Confirm by eval on 5 hand-graded briefs before locking model SKUs |
-| Diagram engine | **Mermaid only** for MVP | Add Structurizr DSL post-MVP |
-| KB source-of-truth | **YAML in repo**, PR-reviewed | Admin UI is a v1.x feature |
-| IaC | **Terraform (Google provider)** | Multi-cloud-portable; matches what we recommend |
-| Auth | **Auth.js** for MVP; **Identity Platform** for enterprise tier later | Avoids Firebase/Identity Platform complexity at MVP |
+| Decision                    | Choice                                                                                     | Notes                                                                                                |
+| --------------------------- | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| Cloud for TESSAR itself     | **Google Cloud (GCP)**                                                                     | Cloud Run DX, Vertex AI for Gemini + Claude in one SDK, Google for Startups credits                  |
+| Web hosting                 | **Cloud Run** (not Vercel, not GKE)                                                        | Private networking to Cloud SQL/Memorystore via Serverless VPC Connector, single-cloud billing & IAM |
+| Worker hosting              | **Cloud Run** with Pub/Sub push subscription                                               | Zero-ops, native scaling, no KEDA                                                                    |
+| Anchor recommendation cloud | **GCP first; AWS + Azure secondary**                                                       | Dogfood + acknowledge both alternatives are common                                                   |
+| Frontier LLM default        | **Vertex AI Gemini** primary, **Claude on Vertex** fallback, **OpenAI direct** last-resort | Confirm by eval on 5 hand-graded briefs before locking model SKUs                                    |
+| Diagram engine              | **Mermaid only** for MVP                                                                   | Add Structurizr DSL post-MVP                                                                         |
+| KB source-of-truth          | **YAML in repo**, PR-reviewed                                                              | Admin UI is a v1.x feature                                                                           |
+| IaC                         | **Terraform (Google provider)**                                                            | Multi-cloud-portable; matches what we recommend                                                      |
+| Auth                        | **Auth.js** for MVP; **Identity Platform** for enterprise tier later                       | Avoids Firebase/Identity Platform complexity at MVP                                                  |
 
 ---
 
 ## 10. Open Decisions To Confirm Before Build
 
-1. **Pricing point** for the single MVP tier (need 5–10 willingness-to-pay conversations).
+1. **Pricing point** for the single MVP tier (need 5–10 willingness-to-pay conversations). Post ADR-0006, the defensible band is **₹1500–₹2500 per run** (or USD equivalent if the audience-currency decision lands on USD-first). Final number remains data-driven; locked before Phase 6 launch.
 2. **Region:** `asia-south1` (Mumbai) vs `us-central1` vs `europe-west1` — driven by initial user geography and Vertex AI model availability for Gemini frontier + Claude.
 3. **Google for Startups Cloud Program** eligibility — apply now; affects whether infra cost is essentially free for the first ~12 months.
 4. **Eval bar:** the minimum aggregate eval score required before enabling paid checkout in prod.
 
-*Once these four land, this spec is buildable as-is.*
+_Once these four land, this spec is buildable as-is._
