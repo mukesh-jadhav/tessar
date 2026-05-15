@@ -15,23 +15,37 @@ const expressiveFast = springs.expressiveFast;
 /* ---------------------------------------------------------------------------
  * /brief — Where a TESSAR run starts.
  *
- * Single viewport, no scroll. Three columns at lg+:
+ * Story: "Tell us about your system, like you&apos;d tell a thoughtful friend."
+ * One column, one focus. The brief IS the page.
  *
- *   ┌─────────────────────────────────────────────────────────────────────┐
- *   │ ✓ TESSAR                              theme · sign-in (floating)    │
- *   ├─────────────┬───────────────────────────────────┬───────────────────┤
- *   │ EXAMPLES    │   THE BRIEF                       │   GUIDE ME        │
- *   │ 3 starters  │   huge expressive textarea        │   wizard fields   │
- *   │             │   live readout                    │   (optional)      │
- *   ├─────────────┴───────────────────────────────────┴───────────────────┤
- *   │ live read    "we'll likely ask · X clarifying questions"   [Run →]  │
- *   └─────────────────────────────────────────────────────────────────────┘
+ *   ┌──────────────────────────────────────────────────────────┐
+ *   │ TESSAR · new brief                       Theme · Sign in │
+ *   ├──────────────────────────────────────────────────────────┤
+ *   │                                                          │
+ *   │  Tell us what you&apos;re building.                       │
+ *   │  A few paragraphs is enough. We&apos;ll ask up to three   │
+ *   │  clarifying questions if anything is missing.            │
+ *   │                                                          │
+ *   │  [Need a starting point?  B2B SaaS · Marketplace · Data] │
+ *   │                                                          │
+ *   │  ┌──────────────────────────────────────────────────┐    │
+ *   │  │  Big writeable area …                             │   │
+ *   │  └──────────────────────────────────────────────────┘    │
+ *   │  217 words · Strong brief — fewer clarifying questions    │
+ *   │                                                          │
+ *   │  We&apos;ll likely ask: scope · audience · region        │
+ *   │                                                          │
+ *   │  ▾ Add structured details (optional, 7 fields)           │
+ *   │                                                          │
+ *   ├──────────────────────────────────────────────────────────┤
+ *   │ $X · ~12 min · PDF + Markdown            Run brief →     │
+ *   └──────────────────────────────────────────────────────────┘
  *
- *   - The textarea is the hero. Everything else exists to support it.
- *   - "Guide me" chips compose into prefix lines that get prepended to the
- *     brief on submit (so users still see exactly what TESSAR will read).
- *   - Examples seed the textarea AND set matching guide chips, so the user
- *     can immediately see the shape of a "good" brief.
+ *   - Single column, scrollable. The brief earns the focus.
+ *   - Starters: inline chips above the textarea, not a sidebar column.
+ *   - Wizard: collapsing &quot;Add structured details&quot; below the brief —
+ *     opt-in for users who want to constrain the run.
+ *   - Sticky action bar at the bottom: price, est. time, Run button.
  * ------------------------------------------------------------------------- */
 
 // ─── Example briefs ─────────────────────────────────────────────
@@ -156,6 +170,14 @@ const BUDGET_OPTIONS: Array<{ id: BudgetChoice; label: string; sub: string }> = 
 
 // ─── Heuristic: how many clarifying questions will we ask? ──────
 
+const TOPIC_LABEL: Record<string, string> = {
+  scope: "scope",
+  audience: "audience",
+  scale: "scale",
+  "region/compliance": "region & compliance",
+  latency: "latency target",
+};
+
 function estimateClarifications(
   brief: string,
   guide: Guide,
@@ -177,7 +199,7 @@ function estimateClarifications(
   if (!/\b(latency|ms|p95|real-time|near-real)\b/i.test(brief) && guide.latency === "standard") {
     topics.push("latency");
   }
-  // Clamp to 0–3 (the MVP's hard cap on clarification questions).
+  // Clamp to 0–3 (the MVP&apos;s hard cap on clarification questions).
   const count = Math.min(3, topics.length);
   return { count, topics: topics.slice(0, count) };
 }
@@ -189,6 +211,7 @@ export default function BriefPage(): React.ReactElement {
   const [guide, setGuide] = useState<Guide>(DEFAULT_GUIDE);
   const [seededBy, setSeededBy] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const charCount = brief.trim().length;
@@ -198,12 +221,13 @@ export default function BriefPage(): React.ReactElement {
   );
   const clarif = useMemo(() => estimateClarifications(brief, guide), [brief, guide]);
 
-  // Keep textarea growing with content, capped so the layout never breaks.
+  // Auto-grow the textarea with content. Generous cap so the brief stays the
+  // hero even on long inputs; the page itself scrolls past that point.
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, 360)}px`;
+    el.style.height = `${Math.max(220, Math.min(el.scrollHeight, 720))}px`;
   }, [brief]);
 
   const seedFromExample = (ex: Example): void => {
@@ -217,7 +241,6 @@ export default function BriefPage(): React.ReactElement {
       compliance: ex.compliance,
     });
     setSeededBy(ex.id);
-    // Refocus the textarea so users feel they can keep editing.
     requestAnimationFrame(() => textareaRef.current?.focus());
   };
 
@@ -226,10 +249,6 @@ export default function BriefPage(): React.ReactElement {
     if (!canSubmit) return;
     setSubmitting(true);
     try {
-      // Phase 2: real intake. POST /api/runs creates the row + publishes
-      // to Pub/Sub; we then jump to the run-progress page which will tail
-      // RunEvent rows (SSE wiring lands in the next slice). Phase 4 will
-      // insert Stripe Checkout between the create and the redirect.
       const res = await fetch("/api/runs", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -248,19 +267,16 @@ export default function BriefPage(): React.ReactElement {
     } catch (err) {
       console.error(err);
       setSubmitting(false);
-      // Soft-fail UX: keep the user on the page so they can retry without
-      // losing the brief. A toast/inline error lands when we add the
-      // shared notification component.
       alert("Could not start the run. Try again in a moment.");
     }
   };
 
   return (
-    <div className="bg-surface text-on-surface relative h-dvh w-screen overflow-hidden">
+    <div className="bg-surface text-on-surface relative min-h-dvh w-full">
       {/* Soft brand wash + hairline grid — same canvas language as / and /decide. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0"
+        className="pointer-events-none fixed inset-0"
         style={{
           background:
             "radial-gradient(60% 50% at 88% 12%, rgb(var(--md-sys-color-primary) / 0.10), transparent 70%), radial-gradient(50% 40% at 10% 92%, rgb(var(--md-sys-color-primary) / 0.06), transparent 70%)",
@@ -268,7 +284,7 @@ export default function BriefPage(): React.ReactElement {
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-[0.025]"
+        className="pointer-events-none fixed inset-0 opacity-[0.025]"
         style={{
           backgroundImage:
             "linear-gradient(rgb(var(--md-sys-color-on-surface)) 1px, transparent 1px), linear-gradient(90deg, rgb(var(--md-sys-color-on-surface)) 1px, transparent 1px)",
@@ -276,8 +292,8 @@ export default function BriefPage(): React.ReactElement {
         }}
       />
 
-      {/* Floating top chrome */}
-      <div className="absolute left-6 top-5 z-20 flex items-center gap-2.5 md:left-10 md:top-7">
+      {/* Top chrome — compact, same shape used on /run/[id] and /decide/[id]. */}
+      <header className="border-outline-variant/60 bg-surface/80 sticky top-0 z-30 flex items-center justify-between gap-3 border-b px-6 py-3 backdrop-blur md:px-10">
         <Link href="/" className="flex items-center gap-2.5">
           <span
             aria-hidden
@@ -294,266 +310,274 @@ export default function BriefPage(): React.ReactElement {
             </svg>
           </span>
           <span className="text-[13px] font-semibold tracking-tight">TESSAR</span>
+          <span className="text-on-surface-variant text-[11px]">· new brief</span>
         </Link>
-        <span className="text-on-surface-variant ml-2 hidden text-[11px] md:inline">· new run</span>
-      </div>
-      <div className="absolute right-6 top-5 z-20 flex items-center gap-2 md:right-10 md:top-7">
-        <ThemeToggle />
-        <Link
-          href="/"
-          className="text-on-surface-variant hover:text-on-surface rounded-full px-3 py-1.5 text-[11.5px] font-semibold"
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <Link
+            href="/dashboard"
+            className="text-on-surface-variant hover:text-on-surface rounded-full px-3 py-1.5 text-[11.5px] font-semibold"
+          >
+            Dashboard
+          </Link>
+        </div>
+      </header>
+
+      {/* Main column — single, narrow, focused. Page scrolls past the fold. */}
+      <main className="relative mx-auto w-full max-w-[760px] px-5 pb-32 pt-10 md:px-8 md:pt-16">
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={expressiveDefault}
         >
-          Sign in
-        </Link>
-      </div>
+          <p className="text-primary text-[10px] font-semibold uppercase tracking-[0.18em]">
+            New brief
+          </p>
+          <h1 className="text-on-surface mt-2 font-serif text-[34px] leading-[1.05] md:text-[44px]">
+            Tell us what you&apos;re building.
+          </h1>
+          <p className="text-on-surface-variant mt-3 max-w-[58ch] text-[13.5px] leading-relaxed">
+            A few paragraphs is enough. We&apos;ll ask up to three clarifying questions if anything
+            is missing, and turn it into a researched architecture in about twelve minutes.
+          </p>
+        </motion.div>
 
-      {/* Main grid — three columns at lg+, stacks down at smaller widths. */}
-      <main className="absolute inset-0 grid grid-rows-[1fr_auto] pt-20">
-        <div className="grid min-h-0 grid-cols-1 gap-6 px-6 pb-3 md:px-10 lg:grid-cols-[260px_1fr_320px]">
-          {/* LEFT — Examples */}
-          <ExamplesRail examples={EXAMPLES} seededBy={seededBy} onPick={seedFromExample} />
+        {/* Starters — inline, compact, opt-in. */}
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ ...expressiveDefault, delay: 0.05 }}
+          className="mt-7 flex flex-wrap items-center gap-2"
+        >
+          <span className="text-on-surface-variant mr-1 text-[11px]">Need a starting point?</span>
+          {EXAMPLES.map((ex) => {
+            const active = seededBy === ex.id;
+            return (
+              <button
+                key={ex.id}
+                type="button"
+                onClick={() => seedFromExample(ex)}
+                className={`rounded-full border px-3 py-1 text-[11.5px] font-medium transition-colors ${
+                  active
+                    ? "border-primary bg-primary text-on-primary"
+                    : "border-outline-variant bg-surface text-on-surface-variant hover:border-primary/50 hover:text-primary"
+                }`}
+              >
+                {ex.title}
+              </button>
+            );
+          })}
+        </motion.div>
 
-          {/* CENTER — The brief */}
-          <section className="flex min-h-0 flex-col">
-            <div className="mb-3 flex items-baseline justify-between gap-3">
-              <div>
-                <p className="text-primary text-[10px] font-semibold uppercase tracking-[0.18em]">
-                  The brief
-                </p>
-                <h1 className="text-on-surface mt-1 font-serif text-[28px] leading-tight md:text-[34px]">
-                  Describe the system you want to build.
-                </h1>
-                <p className="text-on-surface-variant mt-1 text-[12.5px]">
-                  A few paragraphs is enough. We&apos;ll ask up to three clarifying questions if
-                  anything is missing.
-                </p>
-              </div>
-            </div>
-
-            <div className="border-outline-variant bg-surface/90 relative flex min-h-0 flex-1 flex-col rounded-2xl border backdrop-blur">
-              <textarea
-                ref={textareaRef}
-                value={brief}
-                onChange={(e) => {
-                  setBrief(e.target.value);
-                  if (seededBy !== null) setSeededBy(null);
-                }}
-                placeholder="e.g. We're building a B2B workflow tool for ops teams. ~5 000 monthly active users at launch, multi-tenant, EU residency required. Each tenant runs ~50 pipelines/day. p95 dashboard latency target: 200 ms…"
-                className="text-on-surface placeholder:text-on-surface-variant/60 min-h-[180px] flex-1 resize-none rounded-2xl bg-transparent px-5 py-4 text-[14px] leading-relaxed focus:outline-none"
-                spellCheck
-              />
-              {/* Live readout strip */}
-              <div className="border-outline-variant text-on-surface-variant flex items-center justify-between gap-3 border-t px-4 py-2 text-[10.5px]">
-                <div className="flex items-center gap-3">
-                  <span className="tabular-nums">
-                    {wordCount} words · {charCount} chars
-                  </span>
-                  <BriefHealth charCount={charCount} />
-                </div>
-                <ClarifyChip count={clarif.count} topics={clarif.topics} />
-              </div>
-            </div>
-          </section>
-
-          {/* RIGHT — Guide-me wizard */}
-          <GuidePanel guide={guide} onChange={setGuide} />
-        </div>
-
-        {/* Bottom action bar — fixed-height row, never scrolls. */}
-        <div className="border-outline-variant/70 bg-surface/85 flex items-center justify-between gap-4 border-t px-6 py-3 backdrop-blur md:px-10">
-          <div className="text-on-surface-variant flex items-center gap-3 text-[11.5px]">
-            <span className="hidden md:inline">
-              Each run takes about <span className="text-on-surface font-semibold">12 min</span> ·
-              produces a PDF + Markdown package.
+        {/* The brief itself. */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ ...expressiveDefault, delay: 0.1 }}
+          className="border-outline-variant bg-surface/95 mt-4 overflow-hidden rounded-2xl border shadow-[0_2px_24px_-12px_rgb(var(--md-sys-color-primary)/0.18)] backdrop-blur"
+        >
+          <textarea
+            ref={textareaRef}
+            value={brief}
+            onChange={(e) => {
+              setBrief(e.target.value);
+              if (seededBy !== null) setSeededBy(null);
+            }}
+            placeholder="e.g. We're building a B2B workflow tool for ops teams. ~5 000 monthly active users at launch, multi-tenant, EU residency required. Each tenant runs ~50 pipelines/day. p95 dashboard latency target: 200 ms…"
+            className="text-on-surface placeholder:text-on-surface-variant/60 min-h-[220px] w-full resize-none bg-transparent px-6 py-5 text-[15px] leading-[1.65] focus:outline-none"
+            spellCheck
+          />
+          <div className="border-outline-variant text-on-surface-variant flex flex-wrap items-center justify-between gap-3 border-t px-5 py-2.5 text-[11px]">
+            <span className="tabular-nums">
+              {wordCount} {wordCount === 1 ? "word" : "words"} · {charCount} chars
             </span>
-            <span className="md:hidden">~12 min · PDF + MD</span>
+            <BriefHealth charCount={charCount} />
           </div>
-          <div className="flex items-center gap-3">
-            <span className="text-on-surface-variant text-[11px] font-semibold uppercase tracking-wider">
-              {PRICE_PER_RUN_LABEL} / run
+        </motion.div>
+
+        {/* Live clarify hint — what we think we&apos;ll have to ask. */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ ...expressiveDefault, delay: 0.15 }}
+          className="text-on-surface-variant mt-4 flex flex-wrap items-center gap-2 text-[12px]"
+        >
+          {clarif.count === 0 ? (
+            <span className="text-primary inline-flex items-center gap-1.5 font-medium">
+              <span aria-hidden className="bg-primary size-1.5 rounded-full" />
+              We have everything we need.
             </span>
-            <Button
-              onClick={() => void submit()}
-              disabled={!canSubmit}
-              className="gap-2 rounded-full px-5 py-2 text-[12.5px] font-semibold disabled:opacity-50"
+          ) : (
+            <>
+              <span>We&apos;ll likely ask about</span>
+              {clarif.topics.map((t, i) => (
+                <span
+                  key={t}
+                  className="border-outline-variant bg-surface text-on-surface inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium"
+                >
+                  {TOPIC_LABEL[t] ?? t}
+                  {i < clarif.topics.length - 1 ? "" : ""}
+                </span>
+              ))}
+              <span className="text-on-surface-variant/80">
+                · up to {clarif.count} short question{clarif.count === 1 ? "" : "s"}
+              </span>
+            </>
+          )}
+        </motion.div>
+
+        {/* Optional structured details. Closed by default. */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ ...expressiveDefault, delay: 0.2 }}
+          className="mt-8"
+        >
+          <button
+            type="button"
+            onClick={() => setDetailsOpen((v) => !v)}
+            aria-expanded={detailsOpen}
+            className="text-on-surface hover:text-primary group flex items-center gap-2 text-[12.5px] font-semibold"
+          >
+            <motion.span
+              aria-hidden
+              animate={{ rotate: detailsOpen ? 90 : 0 }}
+              transition={expressiveFast}
+              className="text-on-surface-variant inline-block"
             >
-              <AnimatePresence mode="wait" initial={false}>
-                {submitting ? (
-                  <motion.span
-                    key="loading"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={expressiveFast}
-                    className="flex items-center gap-2"
-                  >
-                    <span
-                      aria-hidden
-                      className="border-on-primary size-3 animate-spin rounded-full border-[1.5px] border-t-transparent"
+              ▸
+            </motion.span>
+            Add structured details
+            <span className="text-on-surface-variant text-[11px] font-normal">
+              optional · 7 fields, reduces clarifying questions
+            </span>
+          </button>
+
+          <AnimatePresence initial={false}>
+            {detailsOpen && (
+              <motion.div
+                key="details"
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={expressiveDefault}
+                className="overflow-hidden"
+              >
+                <div className="border-outline-variant bg-surface/70 mt-3 grid gap-5 rounded-2xl border p-5 backdrop-blur md:grid-cols-2">
+                  <GuideField label="Domain">
+                    <Select
+                      options={DOMAIN_OPTIONS.map((o) => ({ id: o.id, label: o.label }))}
+                      value={guide.domain}
+                      onChange={(v) => setGuide({ ...guide, domain: v as DomainChoice })}
                     />
-                    Handing off to Stripe…
-                  </motion.span>
-                ) : (
-                  <motion.span
-                    key="idle"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={expressiveFast}
-                    className="flex items-center gap-1.5"
-                  >
-                    Run brief
-                    <span aria-hidden>→</span>
-                  </motion.span>
-                )}
-              </AnimatePresence>
-            </Button>
-          </div>
-        </div>
+                  </GuideField>
+                  <GuideField label="Scale">
+                    <Select
+                      options={SCALE_OPTIONS.map((o) => ({
+                        id: o.id,
+                        label: `${o.label} · ${o.sub}`,
+                      }))}
+                      value={guide.scale}
+                      onChange={(v) => setGuide({ ...guide, scale: v as ScaleChoice })}
+                    />
+                  </GuideField>
+                  <GuideField label="Region">
+                    <ChipRow
+                      options={REGION_OPTIONS}
+                      value={guide.region}
+                      onChange={(v) => setGuide({ ...guide, region: v as RegionChoice })}
+                    />
+                  </GuideField>
+                  <GuideField label="Cloud preference">
+                    <ChipRow
+                      options={CLOUD_OPTIONS}
+                      value={guide.cloud}
+                      onChange={(v) => setGuide({ ...guide, cloud: v as CloudChoice })}
+                    />
+                  </GuideField>
+                  <GuideField label="Compliance">
+                    <ChipRow
+                      options={COMPLIANCE_OPTIONS}
+                      value={guide.compliance}
+                      onChange={(v) => setGuide({ ...guide, compliance: v as ComplianceChoice })}
+                    />
+                  </GuideField>
+                  <GuideField label="Latency budget">
+                    <ChipRow
+                      options={LATENCY_OPTIONS.map((o) => ({ id: o.id, label: o.label }))}
+                      value={guide.latency}
+                      onChange={(v) => setGuide({ ...guide, latency: v as LatencyChoice })}
+                    />
+                  </GuideField>
+                  <GuideField label="Cost stance">
+                    <ChipRow
+                      options={BUDGET_OPTIONS.map((o) => ({ id: o.id, label: o.label }))}
+                      value={guide.budget}
+                      onChange={(v) => setGuide({ ...guide, budget: v as BudgetChoice })}
+                    />
+                  </GuideField>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
       </main>
+
+      {/* Sticky action bar — price, est. time, Run button. */}
+      <div className="border-outline-variant/70 bg-surface/90 fixed inset-x-0 bottom-0 z-30 border-t backdrop-blur">
+        <div className="mx-auto flex w-full max-w-[760px] items-center justify-between gap-4 px-5 py-3 md:px-8">
+          <div className="text-on-surface-variant flex items-center gap-3 text-[11.5px]">
+            <span className="text-on-surface font-semibold">{PRICE_PER_RUN_LABEL}</span>
+            <span aria-hidden>·</span>
+            <span>~12 min</span>
+            <span aria-hidden className="hidden md:inline">
+              ·
+            </span>
+            <span className="hidden md:inline">PDF + Markdown package</span>
+          </div>
+          <Button
+            onClick={() => void submit()}
+            disabled={!canSubmit}
+            className="gap-2 rounded-full px-5 py-2 text-[12.5px] font-semibold disabled:opacity-50"
+          >
+            <AnimatePresence mode="wait" initial={false}>
+              {submitting ? (
+                <motion.span
+                  key="loading"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={expressiveFast}
+                  className="flex items-center gap-2"
+                >
+                  <span
+                    aria-hidden
+                    className="border-on-primary size-3 animate-spin rounded-full border-[1.5px] border-t-transparent"
+                  />
+                  Starting your run…
+                </motion.span>
+              ) : (
+                <motion.span
+                  key="idle"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={expressiveFast}
+                  className="flex items-center gap-1.5"
+                >
+                  Run brief
+                  <span aria-hidden>→</span>
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
 
-/* ─── ExamplesRail ──────────────────────────────────────────── */
-
-function ExamplesRail({
-  examples,
-  seededBy,
-  onPick,
-}: {
-  examples: Example[];
-  seededBy: string | null;
-  onPick: (ex: Example) => void;
-}): React.ReactElement {
-  return (
-    <aside className="flex min-h-0 flex-col gap-3">
-      <div>
-        <p className="text-on-surface-variant text-[10px] font-semibold uppercase tracking-[0.18em]">
-          Examples
-        </p>
-        <p className="text-on-surface-variant mt-1 text-[11.5px]">
-          Click one to seed the brief. Edit freely afterwards.
-        </p>
-      </div>
-      <ul className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1">
-        {examples.map((ex, i) => {
-          const active = seededBy === ex.id;
-          return (
-            <li key={ex.id}>
-              <motion.button
-                type="button"
-                onClick={() => onPick(ex)}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ ...expressiveDefault, delay: i * 0.05 }}
-                whileHover={{ y: -1 }}
-                whileTap={{ scale: 0.98 }}
-                className={`bg-surface group flex w-full items-start gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors ${
-                  active
-                    ? "border-primary bg-primary/[0.05]"
-                    : "border-outline-variant hover:border-primary/50"
-                }`}
-              >
-                <span
-                  aria-hidden
-                  className={`mt-0.5 grid size-4 shrink-0 place-items-center rounded-full text-[8px] font-bold ${
-                    active
-                      ? "bg-primary text-on-primary"
-                      : "bg-on-surface/[0.06] text-on-surface-variant group-hover:bg-primary/15 group-hover:text-primary"
-                  }`}
-                >
-                  {i + 1}
-                </span>
-                <div className="min-w-0">
-                  <p className="text-on-surface text-[11.5px] font-semibold">{ex.title}</p>
-                  <p className="text-on-surface-variant mt-0.5 line-clamp-3 text-[11px] leading-snug">
-                    {ex.body}
-                  </p>
-                </div>
-              </motion.button>
-            </li>
-          );
-        })}
-      </ul>
-    </aside>
-  );
-}
-
-/* ─── GuidePanel ───────────────────────────────────────────── */
-
-function GuidePanel({
-  guide,
-  onChange,
-}: {
-  guide: Guide;
-  onChange: (g: Guide) => void;
-}): React.ReactElement {
-  const set = <K extends keyof Guide>(k: K, v: Guide[K]): void => onChange({ ...guide, [k]: v });
-  return (
-    <aside className="flex min-h-0 flex-col gap-3">
-      <div>
-        <p className="text-primary text-[10px] font-semibold uppercase tracking-[0.18em]">
-          Guide me
-        </p>
-        <p className="text-on-surface-variant mt-1 text-[11.5px]">
-          Optional. Setting these reduces clarifying questions.
-        </p>
-      </div>
-      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-1">
-        <GuideField label="Domain">
-          <Select
-            options={DOMAIN_OPTIONS.map((o) => ({ id: o.id, label: o.label }))}
-            value={guide.domain}
-            onChange={(v) => set("domain", v as DomainChoice)}
-          />
-        </GuideField>
-        <GuideField label="Scale">
-          <Select
-            options={SCALE_OPTIONS.map((o) => ({ id: o.id, label: `${o.label} · ${o.sub}` }))}
-            value={guide.scale}
-            onChange={(v) => set("scale", v as ScaleChoice)}
-          />
-        </GuideField>
-        <GuideField label="Region">
-          <ChipRow
-            options={REGION_OPTIONS}
-            value={guide.region}
-            onChange={(v) => set("region", v as RegionChoice)}
-          />
-        </GuideField>
-        <GuideField label="Cloud preference">
-          <ChipRow
-            options={CLOUD_OPTIONS}
-            value={guide.cloud}
-            onChange={(v) => set("cloud", v as CloudChoice)}
-          />
-        </GuideField>
-        <GuideField label="Compliance">
-          <ChipRow
-            options={COMPLIANCE_OPTIONS}
-            value={guide.compliance}
-            onChange={(v) => set("compliance", v as ComplianceChoice)}
-          />
-        </GuideField>
-        <GuideField label="Latency budget">
-          <ChipRow
-            options={LATENCY_OPTIONS.map((o) => ({ id: o.id, label: o.label }))}
-            value={guide.latency}
-            onChange={(v) => set("latency", v as LatencyChoice)}
-          />
-        </GuideField>
-        <GuideField label="Cost stance">
-          <ChipRow
-            options={BUDGET_OPTIONS.map((o) => ({ id: o.id, label: o.label }))}
-            value={guide.budget}
-            onChange={(v) => set("budget", v as BudgetChoice)}
-          />
-        </GuideField>
-      </div>
-    </aside>
-  );
-}
+/* ─── GuideField · Select · ChipRow ─────────────────────────── */
 
 function GuideField({
   label,
@@ -564,7 +588,7 @@ function GuideField({
 }): React.ReactElement {
   return (
     <div>
-      <p className="text-on-surface-variant mb-1 text-[10px] font-semibold uppercase tracking-wider">
+      <p className="text-on-surface-variant mb-1.5 text-[10px] font-semibold uppercase tracking-wider">
         {label}
       </p>
       {children}
@@ -585,7 +609,7 @@ function Select({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="border-outline-variant bg-surface text-on-surface focus:border-primary w-full rounded-lg border px-2.5 py-1.5 text-[11.5px] font-medium focus:outline-none"
+      className="border-outline-variant bg-surface text-on-surface focus:border-primary w-full rounded-lg border px-2.5 py-1.5 text-[12px] font-medium focus:outline-none"
     >
       {options.map((o) => (
         <option key={o.id} value={o.id}>
@@ -614,7 +638,7 @@ function ChipRow({
             key={o.id}
             type="button"
             onClick={() => onChange(o.id)}
-            className={`rounded-full border px-2 py-0.5 text-[10.5px] font-medium transition-colors ${
+            className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
               active
                 ? "border-primary bg-primary text-on-primary"
                 : "border-outline-variant bg-surface text-on-surface-variant hover:border-primary/50 hover:text-primary"
@@ -628,7 +652,7 @@ function ChipRow({
   );
 }
 
-/* ─── BriefHealth + ClarifyChip ────────────────────────────── */
+/* ─── BriefHealth ───────────────────────────────────────────── */
 
 function BriefHealth({ charCount }: { charCount: number }): React.ReactElement {
   // Three states: too short → start → strong.
@@ -645,24 +669,6 @@ function BriefHealth({ charCount }: { charCount: number }): React.ReactElement {
     <span className="flex items-center gap-1.5">
       <span aria-hidden className={`size-1.5 rounded-full ${dot}`} />
       <span>{label}</span>
-    </span>
-  );
-}
-
-function ClarifyChip({ count, topics }: { count: number; topics: string[] }): React.ReactElement {
-  return (
-    <span
-      title={count === 0 ? "We have everything we need." : `Likely topics: ${topics.join(", ")}`}
-      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${
-        count === 0
-          ? "border-primary/40 bg-primary/[0.06] text-primary"
-          : "border-outline-variant bg-surface text-on-surface-variant"
-      }`}
-    >
-      <span aria-hidden>?</span>
-      {count === 0
-        ? "No clarifying questions expected"
-        : `~${count} clarifying question${count === 1 ? "" : "s"}`}
     </span>
   );
 }
