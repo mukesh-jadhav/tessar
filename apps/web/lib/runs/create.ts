@@ -30,6 +30,11 @@ export const briefInputSchema = z.object({
       compliance: z.enum(["none", "gdpr", "hipaa", "soc2", "pci"]).optional(),
       latency: z.enum(["relaxed", "standard", "tight"]).optional(),
       budget: z.enum(["lean", "standard", "generous"]).optional(),
+      // Free-text component constraints. The orchestrator treats these
+      // as hard preferences: agents must justify any pick that ignores
+      // a `mustInclude` or violates a `mustExclude`.
+      mustInclude: z.string().max(240).optional(),
+      mustExclude: z.string().max(240).optional(),
     })
     .partial()
     .optional(),

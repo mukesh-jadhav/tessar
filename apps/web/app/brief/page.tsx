@@ -111,6 +111,10 @@ type Guide = {
   compliance: ComplianceChoice;
   latency: LatencyChoice;
   budget: BudgetChoice;
+  /** Comma-separated components the agents MUST keep (e.g. "Postgres, Auth0"). */
+  mustInclude: string;
+  /** Comma-separated components the agents MUST NOT pick (e.g. "MongoDB, serverless"). */
+  mustExclude: string;
 };
 
 const DEFAULT_GUIDE: Guide = {
@@ -121,6 +125,8 @@ const DEFAULT_GUIDE: Guide = {
   compliance: "none",
   latency: "standard",
   budget: "standard",
+  mustInclude: "",
+  mustExclude: "",
 };
 
 const DOMAIN_OPTIONS: Array<{ id: DomainChoice; label: string; sub: string }> = [
@@ -248,10 +254,17 @@ export default function BriefPage(): React.ReactElement {
     if (!canSubmit) return;
     setSubmitting(true);
     try {
+      // Drop empty optional strings so the zod schema doesn't see
+      // "" where it expects a meaningful constraint.
+      const guidePayload = {
+        ...guide,
+        mustInclude: guide.mustInclude.trim() || undefined,
+        mustExclude: guide.mustExclude.trim() || undefined,
+      };
       const res = await fetch("/api/runs", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ brief, guide }),
+        body: JSON.stringify({ brief, guide: guidePayload }),
       });
       if (res.status === 401) {
         window.location.href = `/signin?from=${encodeURIComponent("/brief")}`;
@@ -465,6 +478,42 @@ export default function BriefPage(): React.ReactElement {
                       onChange={(v) => setGuide({ ...guide, budget: v as BudgetChoice })}
                     />
                   </GuideField>
+                  <div className="md:col-span-2">
+                    <GuideField label="Must include (optional)">
+                      <input
+                        type="text"
+                        value={guide.mustInclude}
+                        onChange={(e) =>
+                          setGuide({ ...guide, mustInclude: e.target.value.slice(0, 240) })
+                        }
+                        placeholder="e.g. Postgres, Auth0, Stripe"
+                        maxLength={240}
+                        className="border-outline-variant bg-surface text-on-surface placeholder:text-on-surface-variant/60 focus:border-primary w-full rounded-lg border px-3 py-2 text-[13px] focus:outline-none"
+                      />
+                      <p className="text-on-surface-variant mt-1 text-[10.5px]">
+                        Components we&apos;ve already standardised on. Agents must keep them or
+                        explain why not.
+                      </p>
+                    </GuideField>
+                  </div>
+                  <div className="md:col-span-2">
+                    <GuideField label="Must exclude (optional)">
+                      <input
+                        type="text"
+                        value={guide.mustExclude}
+                        onChange={(e) =>
+                          setGuide({ ...guide, mustExclude: e.target.value.slice(0, 240) })
+                        }
+                        placeholder="e.g. MongoDB, serverless, vendor lock-in"
+                        maxLength={240}
+                        className="border-outline-variant bg-surface text-on-surface placeholder:text-on-surface-variant/60 focus:border-primary w-full rounded-lg border px-3 py-2 text-[13px] focus:outline-none"
+                      />
+                      <p className="text-on-surface-variant mt-1 text-[10.5px]">
+                        Off-limits choices. Agents won&apos;t propose these and won&apos;t cite
+                        them.
+                      </p>
+                    </GuideField>
+                  </div>
                 </div>
               </motion.div>
             )}
