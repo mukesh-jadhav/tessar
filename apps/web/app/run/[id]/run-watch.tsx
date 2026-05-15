@@ -22,6 +22,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { ConfidencePill } from "@/components/ui/confidence-pill";
+import { WhileYouWait } from "@/components/run/while-you-wait";
 import {
   PHASE_LABELS,
   PHASE_ORDER,
@@ -29,6 +30,7 @@ import {
   type RecordedEvent,
 } from "@/lib/mocks/recorded-run";
 import { springs } from "@/lib/motion/springs";
+import { estimateRemainingMs, formatEta } from "@/lib/run/eta";
 
 const expressiveDefault = springs.expressiveDefault;
 
@@ -237,6 +239,12 @@ export function RunWatch({ runId, briefTitle, briefBody }: Props): React.ReactEl
     [state.phaseStatus],
   );
   const progressPct = Math.round((completedPhases / PHASE_ORDER.length) * 100);
+  const etaMs = state.done
+    ? 0
+    : state.startedAt == null
+      ? null
+      : estimateRemainingMs(elapsed, completedPhases, PHASE_ORDER.length);
+  const etaLabel = formatEta(etaMs);
 
   // The assertion = the most recent completion note, falling back to the
   // current phase's verb. This is what makes the wait feel like watching
@@ -290,7 +298,7 @@ export function RunWatch({ runId, briefTitle, briefBody }: Props): React.ReactEl
               <>
                 {progressPct}% · {fmtMs(elapsed)} elapsed · {state.decisions.length} of ~
                 {Math.max(state.decisions.length, 6)} decisions made · {state.metrics.sources}{" "}
-                sources read
+                sources read · <span className="text-on-surface">{etaLabel}</span>
               </>
             )}
           </p>
@@ -311,6 +319,9 @@ export function RunWatch({ runId, briefTitle, briefBody }: Props): React.ReactEl
             />
           </div>
         </section>
+
+        {/* Editorial “while you wait” cards — educate, don’t fidget. */}
+        <WhileYouWait visible={!state.done} className="mb-8" />
 
         {/* Two columns: live feed + accumulating decisions. */}
         <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
