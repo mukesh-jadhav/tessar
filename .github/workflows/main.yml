@@ -138,12 +138,8 @@ jobs:
             --image "$WEB_IMAGE" \
             --port 8080 \
             --update-env-vars "GOOGLE_CLOUD_PROJECT=$PROJECT_ID,SENTRY_ENVIRONMENT=dev,NEXT_PUBLIC_SENTRY_ENVIRONMENT=dev,SENTRY_RELEASE=$IMAGE_TAG" \
+            --update-secrets "SENTRY_DSN=sentry-dsn-web:latest,NEXT_PUBLIC_SENTRY_DSN=sentry-dsn-web:latest" \
             --quiet
-          # Phase 4.2: once `sentry-dsn-web` secret is provisioned (ADR-0010),
-          # uncomment the following step to expose the DSN to the runtime:
-          #   gcloud run services update "${{ vars.GCP_RUN_SERVICE_WEB }}" \
-          #     --project "$PROJECT_ID" --region "$REGION" \
-          #     --update-secrets "SENTRY_DSN=sentry-dsn-web:latest,NEXT_PUBLIC_SENTRY_DSN=sentry-dsn-web:latest" --quiet
 
       # ----- orchestrator -----
       - name: Check for orchestrator Dockerfile
@@ -176,9 +172,5 @@ jobs:
             --region "$REGION" \
             --image "$ORCH_IMAGE" \
             --update-env-vars "PUBSUB_AUDIENCE=$ORCH_URI,GOOGLE_CLOUD_PROJECT=$PROJECT_ID,VERTEX_PROJECT=$PROJECT_ID,VERTEX_LOCATION=us-central1,OTEL_ENABLED=true,OTEL_SERVICE_NAME=tessar-orchestrator,SENTRY_ENVIRONMENT=dev,SENTRY_RELEASE=$IMAGE_TAG" \
+            --update-secrets "SENTRY_DSN=sentry-dsn-worker:latest" \
             --quiet
-          # Phase 4.2: once `sentry-dsn-worker` secret is provisioned (ADR-0010),
-          # uncomment to wire the DSN into the runtime:
-          #   gcloud run services update "${{ vars.GCP_RUN_SERVICE_ORCH }}" \
-          #     --project "$PROJECT_ID" --region "$REGION" \
-          #     --update-secrets "SENTRY_DSN=sentry-dsn-worker:latest" --quiet
