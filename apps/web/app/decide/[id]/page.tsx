@@ -1,10 +1,14 @@
 /**
- * /decide/[id] — Live workspace for a finished run.
+ * /decide/[id] — The post-run reader for a finished package.
  *
- * Server Component. Loads the run, pulls the `package_json` artifact
- * from object storage, maps it into the studio's `DecideData` shape,
- * and renders the same `<DecideStudio />` UI used for the canned
- * /decide demo — the difference is the data source.
+ * Server Component. Loads the run, ownership-checks it, fetches the
+ * `package_json` artifact from object storage, and renders the
+ * five-section <DecideViewer />: Verdict → Decisions → Numbers →
+ * Risks → Audit.
+ *
+ * The canned /decide demo (sales surface) still uses the older
+ * DecideStudio prototype; this page is the consumer-grade deliverable
+ * for real runs.
  *
  * Auth model:
  *   - Must be signed in (Auth.js session)
@@ -15,9 +19,8 @@
 import { notFound, redirect } from "next/navigation";
 
 import { auth } from "@/auth";
-import { DecideStudio } from "@/components/decide/decide-studio";
+import { DecideViewer } from "@/components/decide/decide-viewer";
 import { prisma } from "@/lib/db";
-import { mapRunPackageToDecide } from "@/lib/decide/from-run-package";
 import type { RunPackage } from "@/lib/run-package";
 import { openObject } from "@/lib/storage";
 
@@ -71,17 +74,13 @@ export default async function DecideRunPage({
   const hasMd = run.artifacts.some((a) => a.kind === "package_md");
   const hasPdf = run.artifacts.some((a) => a.kind === "package_pdf");
 
-  const data = mapRunPackageToDecide(pkg);
-
   return (
-    <DecideStudio
-      data={data}
-      meta={{
-        runId: id,
-        runLabel: `Run · ${id.slice(0, 7)}`,
-        mdHref: hasMd ? `/api/runs/${id}/artifact/package_md` : undefined,
-        pdfHref: hasPdf ? `/api/runs/${id}/artifact/package_pdf` : undefined,
-      }}
+    <DecideViewer
+      runId={id}
+      pkg={pkg}
+      hasMd={hasMd}
+      hasPdf={hasPdf}
+      completedAt={run.completedAt ? run.completedAt.toISOString() : null}
     />
   );
 }
