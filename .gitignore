@@ -63,3 +63,5 @@ pnpm-debug.log*
 # Ad-hoc playwright/screenshot scratch files
 tmp_*.png
 tmp_*.jpg
+
+tmp_logs.json
