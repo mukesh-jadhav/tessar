@@ -1,14 +1,20 @@
 /**
  * /decide — Canned design-system demo of the studio.
  *
- * Renders <DecideStudio /> with the default (sample) data bundle and
- * the sample-switcher chip enabled in the top bar. The real per-run
- * experience lives at /decide/[id].
+ * Internal-only: gated behind ?internal=1 so the marketing site doesn&apos;t
+ * surface a fake-data sample as if it were a real run. The real
+ * per-run experience lives at /decide/[id].
  */
-"use client";
+import { notFound } from "next/navigation";
 
 import { DecideStudio } from "@/components/decide/decide-studio";
 
-export default function DecidePage(): React.ReactElement {
+export default async function DecidePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ internal?: string }>;
+}): Promise<React.ReactElement> {
+  const sp = await searchParams;
+  if (sp.internal !== "1") notFound();
   return <DecideStudio meta={{ sampleSwitcher: true }} />;
 }
