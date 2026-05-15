@@ -8,13 +8,14 @@
  *   - FailureModes (with detection / recovery / RTO / RPO)
  *   - BuildSequence (phased build order)
  *
- * Mermaid sources are rendered as styled <pre> blocks for now — the PDF
- * packager does the SVG render via mermaid-cli. Adding the client-side
- * mermaid library would add ~500KB to the bundle for what users mostly
- * read in the export. Revisit when /decide gets a "render in browser"
- * preview for sequence diagrams (BACKLOG).
+ * Mermaid diagrams are rendered to SVG client-side via the lazy-loaded
+ * <MermaidBlock /> component (the mermaid library only lands in the
+ * bundle when this section actually mounts). The PDF export keeps the
+ * verbatim Mermaid source as a fenced code block — it is the archival
+ * record; the rendered visual lives here.
  */
 
+import { MermaidBlock } from "@/components/package/mermaid-block";
 import type {
   ArchNode,
   BuildPhase,
@@ -59,12 +60,7 @@ function SequenceDiagramItem({ d }: { d: SequenceDiagram }): React.ReactElement 
           participants: {d.participants.join(" · ")}
         </p>
       ) : null}
-      <pre className="bg-surface-container text-on-surface-variant mt-3 max-h-[420px] overflow-auto rounded-lg p-3 text-[11px] leading-relaxed">
-        {d.mermaid}
-      </pre>
-      <p className="text-on-surface-variant mt-2 text-[10px] opacity-70">
-        Rendered as SVG in the package PDF.
-      </p>
+      <MermaidBlock id={d.id} source={d.mermaid} className="mt-3" />
     </article>
   );
 }
