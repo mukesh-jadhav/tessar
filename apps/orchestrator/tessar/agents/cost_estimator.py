@@ -46,6 +46,33 @@ PROMPT_VERSION = "v1"
 
 _FENCE = re.compile(r"^\s*```(?:json)?\s*|\s*```\s*$", re.MULTILINE)
 
+# Defensive normalizer for common LLM-invented `kind` values that
+# don't exist in our enum. Sharpening the prompt is the primary
+# fix (see v1.md rule #5), but Gemini occasionally emits `security`
+# / `monitoring` / `iam` even after the validation-error retry.
+# Without this, a transient hallucination burns the full pipeline
+# cost ($0.15+) and produces a user-visible failure for what is
+# effectively a categorization typo. Mappings here are conservative:
+# anything ambiguous defaults to `vendor` (the broadest bucket).
+_KIND_REMAP: dict[str, str] = {
+    "security": "vendor",
+    "waf": "network",
+    "cdn": "network",
+    "messaging": "network",
+    "queue": "network",
+    "email": "vendor",
+    "observability": "vendor",
+    "monitoring": "vendor",
+    "logging": "vendor",
+    "ops": "vendor",
+    "iam": "vendor",
+    "auth": "vendor",
+    "identity": "vendor",
+    "secrets": "vendor",
+    "kms": "storage",
+    "saas": "vendor",
+}
+
 # Tolerance band on KB-cited line cost vs supplied
 # `baseline_cost_usd_per_month`. Wide enough to allow regional /
 # scale adjustments documented in `assumptions`; tight enough to
@@ -187,6 +214,17 @@ def _admissibility_errors(
 def _parse(text: str) -> CostEstimate:
     cleaned = _strip_fences(text)
     data = json.loads(cleaned)
+    # Defensive: remap known LLM-invented `kind` values BEFORE
+    # Pydantic validates the literal enum. See `_KIND_REMAP` above.
+    lines = data.get("lines")
+    if isinstance(lines, list):
+        for line in lines:
+            if isinstance(line, dict):
+                k = line.get("kind")
+                if isinstance(k, str):
+                    remapped = _KIND_REMAP.get(k.strip().lower())
+                    if remapped is not None:
+                        line["kind"] = remapped
     return CostEstimate.model_validate(data)
 
 
