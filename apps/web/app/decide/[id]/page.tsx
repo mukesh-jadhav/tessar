@@ -1,14 +1,10 @@
 /**
  * /decide/[id] — Live workspace for a finished run.
  *
- * Server Component. Loads the run, pulls the `package_json` artifact from
- * object storage, and hands the parsed RunPackage to <DecideWorkspace />,
- * the data-driven counterpart to the /decide demo prototype.
- *
- * The bare `/decide` route stays as the canned design-system playback
- * (used for sales demos and the design system page); `/decide/[id]`
- * is the real-run experience that replaces the old tabbed
- * `/run/[id]/package` viewer.
+ * Server Component. Loads the run, pulls the `package_json` artifact
+ * from object storage, maps it into the studio's `DecideData` shape,
+ * and renders the same `<DecideStudio />` UI used for the canned
+ * /decide demo — the difference is the data source.
  *
  * Auth model:
  *   - Must be signed in (Auth.js session)
@@ -19,10 +15,11 @@
 import { notFound, redirect } from "next/navigation";
 
 import { auth } from "@/auth";
+import { DecideStudio } from "@/components/decide/decide-studio";
 import { prisma } from "@/lib/db";
-import { openObject } from "@/lib/storage";
-import { DecideWorkspace } from "@/components/decide/decide-workspace";
+import { mapRunPackageToDecide } from "@/lib/decide/from-run-package";
 import type { RunPackage } from "@/lib/run-package";
+import { openObject } from "@/lib/storage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -74,13 +71,17 @@ export default async function DecideRunPage({
   const hasMd = run.artifacts.some((a) => a.kind === "package_md");
   const hasPdf = run.artifacts.some((a) => a.kind === "package_pdf");
 
+  const data = mapRunPackageToDecide(pkg);
+
   return (
-    <DecideWorkspace
-      runId={id}
-      pkg={pkg}
-      hasMd={hasMd}
-      hasPdf={hasPdf}
-      completedAt={run.completedAt?.toISOString() ?? null}
+    <DecideStudio
+      data={data}
+      meta={{
+        runId: id,
+        runLabel: `Run · ${id.slice(0, 7)}`,
+        mdHref: hasMd ? `/api/runs/${id}/artifact/md` : undefined,
+        pdfHref: hasPdf ? `/api/runs/${id}/artifact/pdf` : undefined,
+      }}
     />
   );
 }
