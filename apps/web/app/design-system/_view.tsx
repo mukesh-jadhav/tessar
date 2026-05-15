@@ -18,6 +18,320 @@ import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { Sheet } from "@/components/ui/sheet";
 import { WavyProgress } from "@/components/ui/wavy-progress";
+import { SystemDesignPane } from "@/components/package/system-design-sections";
+import {
+  SAMPLE_BUILD_SEQUENCE,
+  SAMPLE_COMPONENT_RATIONALES,
+  SAMPLE_FAILURE_MODES,
+  SAMPLE_INTEGRATION_CONTRACTS,
+  SAMPLE_SEQUENCE_DIAGRAMS,
+} from "@/lib/mocks/system-design-fixture";
+import type { ArchNode } from "@/lib/run-package";
+
+// Minimal node stubs so the rationale / failure-mode / build-sequence sections
+// can render their pretty labels without dragging the full mock package in.
+const SHOWCASE_NODES: ArchNode[] = [
+  {
+    id: "client",
+    label: "Client",
+    sub: "Web + mobile",
+    zone: "client",
+    icon: "",
+    cite: 0,
+    dataClass: "public",
+    failureDomain: [],
+    why: "",
+    scale: [
+      { tier: "1×", note: "" },
+      { tier: "10×", note: "" },
+      { tier: "100×", note: "" },
+    ],
+    alts: "",
+    x: 0,
+    y: 0,
+    w: 0,
+  },
+  {
+    id: "lb",
+    label: "Global LB + Cloud Armor",
+    sub: "Edge",
+    zone: "edge",
+    icon: "",
+    cite: 0,
+    dataClass: "public",
+    failureDomain: [],
+    why: "",
+    scale: [
+      { tier: "1×", note: "" },
+      { tier: "10×", note: "" },
+      { tier: "100×", note: "" },
+    ],
+    alts: "",
+    x: 0,
+    y: 0,
+    w: 0,
+  },
+  {
+    id: "cdn",
+    label: "Cloud CDN",
+    sub: "Edge cache",
+    zone: "edge",
+    icon: "",
+    cite: 0,
+    dataClass: "public",
+    failureDomain: [],
+    why: "",
+    scale: [
+      { tier: "1×", note: "" },
+      { tier: "10×", note: "" },
+      { tier: "100×", note: "" },
+    ],
+    alts: "",
+    x: 0,
+    y: 0,
+    w: 0,
+  },
+  {
+    id: "app",
+    label: "App (Cloud Run)",
+    sub: "Stateless",
+    zone: "app",
+    icon: "",
+    cite: 0,
+    dataClass: "internal",
+    failureDomain: [],
+    why: "",
+    scale: [
+      { tier: "1×", note: "" },
+      { tier: "10×", note: "" },
+      { tier: "100×", note: "" },
+    ],
+    alts: "",
+    x: 0,
+    y: 0,
+    w: 0,
+  },
+  {
+    id: "db",
+    label: "Cloud SQL Postgres",
+    sub: "Primary",
+    zone: "data",
+    icon: "",
+    cite: 0,
+    dataClass: "confidential",
+    failureDomain: [],
+    why: "",
+    scale: [
+      { tier: "1×", note: "" },
+      { tier: "10×", note: "" },
+      { tier: "100×", note: "" },
+    ],
+    alts: "",
+    x: 0,
+    y: 0,
+    w: 0,
+  },
+  {
+    id: "redis",
+    label: "Memorystore Redis",
+    sub: "Cache + streams",
+    zone: "data",
+    icon: "",
+    cite: 0,
+    dataClass: "internal",
+    failureDomain: [],
+    why: "",
+    scale: [
+      { tier: "1×", note: "" },
+      { tier: "10×", note: "" },
+      { tier: "100×", note: "" },
+    ],
+    alts: "",
+    x: 0,
+    y: 0,
+    w: 0,
+  },
+  {
+    id: "pubsub",
+    label: "Pub/Sub",
+    sub: "Job queue",
+    zone: "data",
+    icon: "",
+    cite: 0,
+    dataClass: "internal",
+    failureDomain: [],
+    why: "",
+    scale: [
+      { tier: "1×", note: "" },
+      { tier: "10×", note: "" },
+      { tier: "100×", note: "" },
+    ],
+    alts: "",
+    x: 0,
+    y: 0,
+    w: 0,
+  },
+  {
+    id: "worker",
+    label: "Worker (Cloud Run)",
+    sub: "Async",
+    zone: "app",
+    icon: "",
+    cite: 0,
+    dataClass: "internal",
+    failureDomain: [],
+    why: "",
+    scale: [
+      { tier: "1×", note: "" },
+      { tier: "10×", note: "" },
+      { tier: "100×", note: "" },
+    ],
+    alts: "",
+    x: 0,
+    y: 0,
+    w: 0,
+  },
+  {
+    id: "gcs",
+    label: "Cloud Storage",
+    sub: "Artifacts",
+    zone: "data",
+    icon: "",
+    cite: 0,
+    dataClass: "confidential",
+    failureDomain: [],
+    why: "",
+    scale: [
+      { tier: "1×", note: "" },
+      { tier: "10×", note: "" },
+      { tier: "100×", note: "" },
+    ],
+    alts: "",
+    x: 0,
+    y: 0,
+    w: 0,
+  },
+  {
+    id: "db_replica",
+    label: "Cloud SQL read replica",
+    sub: "Read scale",
+    zone: "data",
+    icon: "",
+    cite: 0,
+    dataClass: "confidential",
+    failureDomain: [],
+    why: "",
+    scale: [
+      { tier: "1×", note: "" },
+      { tier: "10×", note: "" },
+      { tier: "100×", note: "" },
+    ],
+    alts: "",
+    x: 0,
+    y: 0,
+    w: 0,
+  },
+  {
+    id: "db_replica_dr",
+    label: "DR read replica",
+    sub: "Cross-region",
+    zone: "data",
+    icon: "",
+    cite: 0,
+    dataClass: "confidential",
+    failureDomain: [],
+    why: "",
+    scale: [
+      { tier: "1×", note: "" },
+      { tier: "10×", note: "" },
+      { tier: "100×", note: "" },
+    ],
+    alts: "",
+    x: 0,
+    y: 0,
+    w: 0,
+  },
+  {
+    id: "gcs_multiregion",
+    label: "GCS multi-region",
+    sub: "DR",
+    zone: "data",
+    icon: "",
+    cite: 0,
+    dataClass: "confidential",
+    failureDomain: [],
+    why: "",
+    scale: [
+      { tier: "1×", note: "" },
+      { tier: "10×", note: "" },
+      { tier: "100×", note: "" },
+    ],
+    alts: "",
+    x: 0,
+    y: 0,
+    w: 0,
+  },
+  {
+    id: "otel",
+    label: "OpenTelemetry",
+    sub: "Tracing",
+    zone: "app",
+    icon: "",
+    cite: 0,
+    dataClass: "internal",
+    failureDomain: [],
+    why: "",
+    scale: [
+      { tier: "1×", note: "" },
+      { tier: "10×", note: "" },
+      { tier: "100×", note: "" },
+    ],
+    alts: "",
+    x: 0,
+    y: 0,
+    w: 0,
+  },
+  {
+    id: "sentry",
+    label: "Sentry",
+    sub: "Errors",
+    zone: "app",
+    icon: "",
+    cite: 0,
+    dataClass: "internal",
+    failureDomain: [],
+    why: "",
+    scale: [
+      { tier: "1×", note: "" },
+      { tier: "10×", note: "" },
+      { tier: "100×", note: "" },
+    ],
+    alts: "",
+    x: 0,
+    y: 0,
+    w: 0,
+  },
+  {
+    id: "armor",
+    label: "Cloud Armor (OWASP)",
+    sub: "WAF",
+    zone: "edge",
+    icon: "",
+    cite: 0,
+    dataClass: "public",
+    failureDomain: [],
+    why: "",
+    scale: [
+      { tier: "1×", note: "" },
+      { tier: "10×", note: "" },
+      { tier: "100×", note: "" },
+    ],
+    alts: "",
+    x: 0,
+    y: 0,
+    w: 0,
+  },
+];
 
 export default function DesignSystemView(): React.ReactElement {
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -137,6 +451,27 @@ export default function DesignSystemView(): React.ReactElement {
           </Button>
         </div>
       </Sheet>
+
+      <section className="flex flex-col gap-3">
+        <div className="flex flex-col gap-1">
+          <h2 className="text-on-surface-variant text-sm font-medium">
+            System-design narrative (ADR-0006)
+          </h2>
+          <p className="text-on-surface-variant text-xs opacity-80">
+            Five new sections the architect / synthesizer / packager will emit at MVP launch.
+            Rendered here against the SaaS sample fixture so we can iterate on layout before the
+            agents populate them for real.
+          </p>
+        </div>
+        <SystemDesignPane
+          sequenceDiagrams={SAMPLE_SEQUENCE_DIAGRAMS}
+          integrationContracts={SAMPLE_INTEGRATION_CONTRACTS}
+          componentRationales={SAMPLE_COMPONENT_RATIONALES}
+          failureModes={SAMPLE_FAILURE_MODES}
+          buildSequence={SAMPLE_BUILD_SEQUENCE}
+          nodes={SHOWCASE_NODES}
+        />
+      </section>
     </main>
   );
 }

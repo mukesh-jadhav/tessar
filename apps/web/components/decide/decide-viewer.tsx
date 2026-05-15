@@ -33,12 +33,14 @@ import {
   RiskCard,
   fmtUsd,
 } from "@/components/package/package-view";
+import { SystemDesignPane } from "@/components/package/system-design-sections";
 import type { ArchNode, BomLine, Decision, Risk, RunPackage } from "@/lib/run-package";
 
-type Section = "verdict" | "decisions" | "numbers" | "risks" | "audit";
+type Section = "verdict" | "system-design" | "decisions" | "numbers" | "risks" | "audit";
 
 const SECTIONS: Array<{ id: Section; label: string; hint: string }> = [
   { id: "verdict", label: "Verdict", hint: "The answer in one screen" },
+  { id: "system-design", label: "System design", hint: "How it fits & how it fails" },
   { id: "decisions", label: "Decisions", hint: "Every pick, every alternative" },
   { id: "numbers", label: "Numbers", hint: "Cost at 1× / 10× / 100×" },
   { id: "risks", label: "Risks", hint: "What can go wrong, what to do" },
@@ -78,6 +80,17 @@ export function DecideViewer({
 
       <main className="mx-auto w-full max-w-6xl px-6 pb-24 pt-8 md:px-10">
         {section === "verdict" ? <VerdictSection pkg={pkg} /> : null}
+        {section === "system-design" ? (
+          <SystemDesignPane
+            sequenceDiagrams={pkg.sequenceDiagrams}
+            integrationContracts={pkg.integrationContracts}
+            componentRationales={pkg.componentRationales}
+            failureModes={pkg.failureModes}
+            buildSequence={pkg.buildSequence}
+            nodes={pkg.nodes}
+            onCite={() => setSection("audit")}
+          />
+        ) : null}
         {section === "decisions" ? <DecisionsSection pkg={pkg} /> : null}
         {section === "numbers" ? <NumbersSection pkg={pkg} /> : null}
         {section === "risks" ? <RisksSection pkg={pkg} /> : null}

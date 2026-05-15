@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { ConfidencePill } from "@/components/ui/confidence-pill";
+import { SystemDesignPane } from "@/components/package/system-design-sections";
 import { ThemeToggle } from "@/components/theme-toggle";
 import type {
   ArchEdge,
@@ -31,11 +32,19 @@ import type {
  * the worker already computed.
  * ------------------------------------------------------------------------- */
 
-type Tab = "overview" | "architecture" | "components" | "decisions" | "risks" | "sources";
+type Tab =
+  | "overview"
+  | "architecture"
+  | "system-design"
+  | "components"
+  | "decisions"
+  | "risks"
+  | "sources";
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: "overview", label: "Overview" },
   { id: "architecture", label: "Architecture" },
+  { id: "system-design", label: "System design" },
   { id: "components", label: "Components" },
   { id: "decisions", label: "Decisions" },
   { id: "risks", label: "Risks" },
@@ -173,6 +182,17 @@ export function PackageView({ runId, pkg, hasMd, hasPdf, completedAt }: Props): 
       <main className="mx-auto max-w-6xl px-6 py-8 md:px-10">
         {tab === "overview" && <OverviewTab pkg={pkg} totalCost={totalCost} />}
         {tab === "architecture" && <ArchitectureTab pkg={pkg} />}
+        {tab === "system-design" && (
+          <SystemDesignPane
+            sequenceDiagrams={pkg.sequenceDiagrams}
+            integrationContracts={pkg.integrationContracts}
+            componentRationales={pkg.componentRationales}
+            failureModes={pkg.failureModes}
+            buildSequence={pkg.buildSequence}
+            nodes={pkg.nodes}
+            onCite={() => setTab("sources")}
+          />
+        )}
         {tab === "components" && <ComponentsTab pkg={pkg} totalCost={totalCost} />}
         {tab === "decisions" && <DecisionsTab pkg={pkg} />}
         {tab === "risks" && <RisksTab pkg={pkg} />}
