@@ -15,21 +15,21 @@ const expressiveDefault = springs.expressiveDefault;
 /* ---------------------------------------------------------------------------
  * /dashboard — Account home + run history.
  *
- * Two states:
- *   - empty: hero card "Start your first run" → /brief
- *   - non-empty: counters + filterable card grid of past runs
+ * Story: this is where you come back to your past decisions. Each card is one
+ * past brief + the package it produced. The brief itself is the headline (it
+ * is what the user wrote and what they recognize); status, counts, and date
+ * are quiet supporting metadata. One primary action per card.
  *
- * Toggle the URL `?empty=1` to demo the empty state. Phase 2 will compute
- * emptiness from the real `runs` table.
+ * Two states:
+ *   - empty: hero "Start your first run" → /brief
+ *   - non-empty: tight summary line + filterable card grid
+ *
+ * `?empty=1` forces the empty state for design review.
  * ------------------------------------------------------------------------- */
 
 type Filter = "all" | RunStatus;
 
 export default function DashboardPage(): React.ReactElement {
-  // Real data from /api/runs (auth-gated). On error or while loading we
-  // render the empty hero rather than a spinner — it's the same component,
-  // so there's no layout pop. The `?empty=1` URL param still forces empty
-  // for design review.
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [loaded, setLoaded] = useState(false);
   useEffect(() => {
@@ -70,11 +70,12 @@ export default function DashboardPage(): React.ReactElement {
     const completed = runs.filter((r) => r.status === "completed").length;
     const spent = runs.reduce((s, r) => s + r.paidUsd, 0);
     const components = runs.reduce((s, r) => s + r.components, 0);
-    return { runs: runs.length, completed, spent, components };
+    const sources = runs.reduce((s, r) => s + r.sources, 0);
+    return { runs: runs.length, completed, spent, components, sources };
   }, [runs]);
 
   return (
-    <div className="bg-surface text-on-surface relative min-h-dvh w-screen overflow-x-hidden">
+    <div className="bg-surface text-on-surface relative min-h-dvh w-full overflow-x-hidden">
       {/* Canvas backdrop — same language as / */}
       <div
         aria-hidden
@@ -94,7 +95,7 @@ export default function DashboardPage(): React.ReactElement {
         }}
       />
 
-      <header className="border-outline-variant bg-surface/85 sticky top-0 z-20 flex items-center justify-between border-b px-6 py-3 backdrop-blur md:px-10">
+      <header className="border-outline-variant/60 bg-surface/80 sticky top-0 z-20 flex items-center justify-between gap-3 border-b px-6 py-3 backdrop-blur md:px-10">
         <div className="flex items-center gap-3">
           <Link href="/" className="flex items-center gap-2.5">
             <span
@@ -122,12 +123,6 @@ export default function DashboardPage(): React.ReactElement {
           >
             Billing
           </Link>
-          <Link
-            href="/signin"
-            className="text-on-surface-variant hover:bg-on-surface/[0.04] hover:text-on-surface rounded-full px-3 py-1.5 font-medium"
-          >
-            Sign out
-          </Link>
           <ThemeToggle />
           <Link href="/brief">
             <Button className="ml-1 rounded-full px-3.5 py-1.5 text-[11.5px] font-semibold">
@@ -137,12 +132,12 @@ export default function DashboardPage(): React.ReactElement {
         </nav>
       </header>
 
-      <main className="relative z-10 mx-auto max-w-[1200px] px-6 py-8 md:px-10">
+      <main className="relative z-10 mx-auto max-w-[1200px] px-6 py-10 md:px-10 md:py-14">
         {!loaded ? null : runs.length === 0 ? (
           <EmptyHero />
         ) : (
           <>
-            <SummaryRow totals={totals} />
+            <SummaryLine totals={totals} />
             <FilterBar filter={filter} setFilter={setFilter} runs={runs} />
             <RunGrid runs={filtered} />
           </>
@@ -167,74 +162,47 @@ function EmptyHero(): React.ReactElement {
         Decide what to build.
       </h1>
       <p className="text-on-surface-variant mx-auto mt-3 max-w-[460px] text-[13.5px] leading-relaxed">
-        Describe the system in plain words. About 12 minutes later you&apos;ll have a researched,
-        defensible architecture you can defend to anyone.
+        Describe the system in plain words. About twelve minutes later you&apos;ll have a
+        researched, defensible architecture you can take to anyone.
       </p>
-      <div className="mt-6 flex items-center justify-center gap-3">
+      <div className="mt-7 flex items-center justify-center">
         <Link href="/brief">
           <Button className="rounded-full px-6 py-2.5 text-[13px] font-semibold">
             Start a brief →
           </Button>
-        </Link>
-        <Link
-          href="/decide"
-          className="text-on-surface-variant hover:text-on-surface text-[12px] font-medium underline-offset-2 hover:underline"
-        >
-          See a sample first
         </Link>
       </div>
     </motion.section>
   );
 }
 
-function SummaryRow({
+function SummaryLine({
   totals,
 }: {
-  totals: { runs: number; completed: number; spent: number; components: number };
-}): React.ReactElement {
-  return (
-    <div className="grid gap-3 md:grid-cols-4">
-      <SummaryCard label="Runs" value={totals.runs.toString()} sub="all-time" />
-      <SummaryCard
-        label="Completed"
-        value={totals.completed.toString()}
-        sub={`${Math.round((totals.completed / Math.max(1, totals.runs)) * 100)}% success`}
-      />
-      <SummaryCard
-        label="Spent"
-        value={`$${totals.spent}`}
-        sub={`${totals.runs > 0 ? `$${(totals.spent / totals.runs).toFixed(0)} avg` : "—"}`}
-      />
-      <SummaryCard
-        label="Components"
-        value={totals.components.toString()}
-        sub="researched & cited"
-      />
-    </div>
-  );
-}
-
-function SummaryCard({
-  label,
-  value,
-  sub,
-}: {
-  label: string;
-  value: string;
-  sub: string;
+  totals: { runs: number; completed: number; spent: number; components: number; sources: number };
 }): React.ReactElement {
   return (
     <motion.div
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={expressiveDefault}
-      className="border-outline-variant bg-surface/95 rounded-2xl border px-4 py-3 backdrop-blur"
     >
-      <p className="text-on-surface-variant text-[10px] font-semibold uppercase tracking-wider">
-        {label}
+      <p className="text-primary text-[10px] font-semibold uppercase tracking-[0.18em]">
+        Welcome back
       </p>
-      <p className="text-on-surface mt-1 text-[26px] font-semibold tabular-nums">{value}</p>
-      <p className="text-on-surface-variant text-[10.5px]">{sub}</p>
+      <h1 className="text-on-surface mt-2 font-serif text-[32px] leading-[1.1] md:text-[40px]">
+        {totals.completed === 0
+          ? "Your first decision is in progress."
+          : totals.completed === 1
+            ? "One decision made. Ready for the next?"
+            : `${totals.completed} decisions made. Ready for the next?`}
+      </h1>
+      <p className="text-on-surface-variant mt-2 text-[13px]">
+        <span className="text-on-surface font-semibold tabular-nums">{totals.runs}</span> run
+        {totals.runs === 1 ? "" : "s"} · <span className="tabular-nums">${totals.spent}</span> spent
+        · <span className="tabular-nums">{totals.components}</span> components researched ·{" "}
+        <span className="tabular-nums">{totals.sources}</span> sources cited
+      </p>
     </motion.div>
   );
 }
@@ -263,7 +231,7 @@ function FilterBar({
     { id: "refunded", label: "Refunded" },
   ];
   return (
-    <div className="mb-4 mt-7 flex items-center justify-between gap-3">
+    <div className="mb-4 mt-9 flex items-center justify-between gap-3">
       <h2 className="text-on-surface font-serif text-[20px] leading-tight">Past runs</h2>
       <div role="tablist" className="flex flex-wrap gap-1.5">
         {opts.map((o) => {
@@ -318,47 +286,76 @@ function RunGrid({ runs }: { runs: RunSummary[] }): React.ReactElement {
   );
 }
 
+/* ─── RunCard ───────────────────────────────────────────────── */
+
 function RunCard({ run }: { run: RunSummary }): React.ReactElement {
+  // One primary destination per card. The whole card is clickable.
+  const primaryHref =
+    run.status === "completed"
+      ? `/decide/${run.id}`
+      : run.status === "in_progress"
+        ? `/run/${run.id}`
+        : `/brief`;
+  const primaryLabel =
+    run.status === "completed"
+      ? "Open package →"
+      : run.status === "in_progress"
+        ? "Watch live →"
+        : run.status === "failed"
+          ? "Retry brief →"
+          : "Re-run →";
+
   return (
-    <article className="border-outline-variant bg-surface/95 hover:border-primary/50 group flex h-full flex-col rounded-2xl border p-4 backdrop-blur transition-colors">
+    <Link
+      href={primaryHref}
+      className="border-outline-variant bg-surface/95 hover:border-primary/60 focus-visible:border-primary group flex h-full flex-col rounded-2xl border p-4 backdrop-blur transition-[border-color,box-shadow] hover:shadow-[0_4px_24px_-12px_rgb(var(--md-sys-color-primary)/0.35)] focus-visible:outline-none"
+    >
+      {/* Eyebrow row: domain · status · run id */}
       <header className="flex items-center justify-between gap-2">
-        <span className="text-on-surface-variant text-[10px] font-semibold uppercase tracking-wider">
-          {run.domain}
-        </span>
+        <div className="text-on-surface-variant flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider">
+          <span>{run.domain}</span>
+          <span aria-hidden>·</span>
+          <span className="text-on-surface-variant/80 font-mono lowercase tracking-normal">
+            #{run.id.slice(0, 7)}
+          </span>
+        </div>
         <StatusPill status={run.status} />
       </header>
-      <p className="text-on-surface mt-2 line-clamp-3 text-[12.5px] leading-relaxed">{run.brief}</p>
-      <dl className="border-outline-variant text-on-surface-variant mt-3 grid grid-cols-3 gap-2 border-t pt-2 text-[10.5px]">
-        <Stat label="Components" value={run.components.toString()} />
-        <Stat label="Sources" value={run.sources.toString()} />
-        <Stat label="Duration" value={`${Math.round(run.durationSec / 60)}m`} />
+
+      {/* Brief title — the headline. */}
+      <p className="text-on-surface mt-3 line-clamp-3 text-[14px] font-medium leading-snug">
+        {run.brief}
+      </p>
+
+      {/* Meta strip — quiet supporting numbers. */}
+      <dl className="text-on-surface-variant mt-4 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-[10.5px]">
+        {run.status === "completed" || run.status === "refunded" ? (
+          <>
+            <Stat label="Components" value={run.components.toString()} />
+            <Stat label="Sources" value={run.sources.toString()} />
+            <Stat label="Took" value={`${Math.max(1, Math.round(run.durationSec / 60))}m`} />
+          </>
+        ) : run.status === "in_progress" ? (
+          <Stat label="Status" value="Researching now" />
+        ) : (
+          <Stat label="Status" value="Did not complete" />
+        )}
       </dl>
-      <footer className="mt-3 flex items-center justify-between gap-2">
-        <span className="text-on-surface-variant text-[10.5px]">{fmtDate(run.createdAt)}</span>
-        <div className="flex items-center gap-2">
-          {run.status === "completed" ? (
-            <Link
-              href="/decide"
-              className="border-outline-variant text-on-surface-variant hover:border-primary hover:text-primary rounded-full border px-3 py-1 text-[11px] font-semibold"
-            >
-              Open
-            </Link>
-          ) : null}
-          <Link
-            href="/brief"
-            className="bg-primary/10 text-primary hover:bg-primary/20 rounded-full px-3 py-1 text-[11px] font-semibold"
-          >
-            Re-run
-          </Link>
-        </div>
+
+      {/* Footer: date + primary action. */}
+      <footer className="border-outline-variant mt-4 flex items-center justify-between gap-2 border-t pt-3">
+        <span className="text-on-surface-variant text-[11px]">{fmtDate(run.createdAt)}</span>
+        <span className="text-primary inline-flex items-center gap-1 text-[11.5px] font-semibold transition-transform group-hover:translate-x-0.5">
+          {primaryLabel}
+        </span>
       </footer>
-    </article>
+    </Link>
   );
 }
 
 function Stat({ label, value }: { label: string; value: string }): React.ReactElement {
   return (
-    <div>
+    <div className="flex items-baseline gap-1.5">
       <dt className="text-[9.5px] uppercase tracking-wider">{label}</dt>
       <dd className="text-on-surface text-[12px] font-semibold tabular-nums">{value}</dd>
     </div>
