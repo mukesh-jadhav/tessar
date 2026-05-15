@@ -34,7 +34,7 @@ export type RecordedEvent =
       t: number;
       payload: {
         phase: Phase;
-        status: "started" | "completed";
+        status: "started" | "completed" | "failed";
         /** Optional one-liner shown in the timeline ("Picked Postgres + pgvector"). */
         note?: string;
       };
@@ -87,7 +87,7 @@ export type RecordedEvent =
 const PH = (
   t: number,
   phase: Phase,
-  status: "started" | "completed",
+  status: "started" | "completed" | "failed",
   note?: string,
 ): RecordedEvent => ({ kind: "phase", t, payload: { phase, status, note } });
 
@@ -98,7 +98,11 @@ export const RECORDED_RUN: RecordedEvent[] = [
   PH(2400, "intake_normalizer", "completed", "Brief normalized · domain = B2B SaaS"),
 
   PH(2700, "requirements_extractor", "started"),
-  { kind: "source", t: 4800, payload: { id: 1, title: "GDPR data-residency overview", publisher: "EU Commission" } },
+  {
+    kind: "source",
+    t: 4800,
+    payload: { id: 1, title: "GDPR data-residency overview", publisher: "EU Commission" },
+  },
   {
     kind: "clarify",
     t: 6400,
@@ -115,14 +119,38 @@ export const RECORDED_RUN: RecordedEvent[] = [
   PH(13800, "research_planner", "completed", "8 questions to answer"),
 
   PH(14000, "research_workers", "started", "8 workers in parallel"),
-  { kind: "source", t: 15200, payload: { id: 2, title: "Cloud Run pricing & cold-start", publisher: "GCP Docs" } },
-  { kind: "source", t: 16100, payload: { id: 3, title: "pgvector benchmarks at 1M rows", publisher: "Supabase Blog" } },
+  {
+    kind: "source",
+    t: 15200,
+    payload: { id: 2, title: "Cloud Run pricing & cold-start", publisher: "GCP Docs" },
+  },
+  {
+    kind: "source",
+    t: 16100,
+    payload: { id: 3, title: "pgvector benchmarks at 1M rows", publisher: "Supabase Blog" },
+  },
   { kind: "metric", t: 17000, payload: { tokens: 18400, costUsd: 0.064, sources: 3 } },
-  { kind: "source", t: 18900, payload: { id: 4, title: "Pub/Sub vs Service Bus latency", publisher: "Cloud Native Now" } },
-  { kind: "source", t: 21500, payload: { id: 5, title: "Tavily Search API limits", publisher: "Tavily Docs" } },
-  { kind: "source", t: 24800, payload: { id: 6, title: "Memorystore Redis Streams patterns", publisher: "GCP Docs" } },
+  {
+    kind: "source",
+    t: 18900,
+    payload: { id: 4, title: "Pub/Sub vs Service Bus latency", publisher: "Cloud Native Now" },
+  },
+  {
+    kind: "source",
+    t: 21500,
+    payload: { id: 5, title: "Tavily Search API limits", publisher: "Tavily Docs" },
+  },
+  {
+    kind: "source",
+    t: 24800,
+    payload: { id: 6, title: "Memorystore Redis Streams patterns", publisher: "GCP Docs" },
+  },
   { kind: "metric", t: 27000, payload: { tokens: 41200, costUsd: 0.18, sources: 6 } },
-  { kind: "source", t: 30200, payload: { id: 7, title: "GDPR-compliant LLM routing", publisher: "Hashicorp Blog" } },
+  {
+    kind: "source",
+    t: 30200,
+    payload: { id: 7, title: "GDPR-compliant LLM routing", publisher: "Hashicorp Blog" },
+  },
   PH(33000, "research_workers", "completed", "8/8 workers returned"),
 
   // ── synthesis & architecture (5 – 8 min) ─────────────────────
@@ -130,17 +158,32 @@ export const RECORDED_RUN: RecordedEvent[] = [
   {
     kind: "decision",
     t: 35400,
-    payload: { id: "d-db", topic: "Primary database", pick: "Cloud SQL Postgres + pgvector", conf: "high" },
+    payload: {
+      id: "d-db",
+      topic: "Primary database",
+      pick: "Cloud SQL Postgres + pgvector",
+      conf: "high",
+    },
   },
   {
     kind: "decision",
     t: 37800,
-    payload: { id: "d-queue", topic: "Job queue", pick: "Pub/Sub + push subscription", conf: "high" },
+    payload: {
+      id: "d-queue",
+      topic: "Job queue",
+      pick: "Pub/Sub + push subscription",
+      conf: "high",
+    },
   },
   {
     kind: "decision",
     t: 40200,
-    payload: { id: "d-llm", topic: "LLM router", pick: "Vertex Gemini → Claude → OpenAI fallback", conf: "med" },
+    payload: {
+      id: "d-llm",
+      topic: "LLM router",
+      pick: "Vertex Gemini → Claude → OpenAI fallback",
+      conf: "med",
+    },
   },
   PH(43000, "synthesizer", "completed", "11 components picked · all cited"),
 

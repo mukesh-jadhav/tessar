@@ -42,7 +42,7 @@ type FeedItem =
       t: number;
       kind: "phase";
       phase: Phase;
-      status: "started" | "completed";
+      status: "started" | "completed" | "failed";
       note?: string;
     }
   | { id: string; t: number; kind: "source"; n: number; title: string; publisher: string }
@@ -57,7 +57,7 @@ type FeedItem =
 
 interface State {
   startedAt: number | null;
-  phaseStatus: Partial<Record<Phase, "started" | "completed">>;
+  phaseStatus: Partial<Record<Phase, "started" | "completed" | "failed">>;
   currentPhase: Phase | null;
   /** Most recent phase note ("5k MAU · EU residency · 200ms p95") to show as the assertion. */
   currentNote: string | null;
@@ -71,6 +71,9 @@ interface State {
   }>;
   metrics: { tokens: number; costUsd: number; sources: number };
   done: boolean;
+  /** Set when the backend terminally fails on a phase. Render the failure UI. */
+  failedPhase: Phase | null;
+  failureNote: string | null;
 }
 
 const INITIAL: State = {
@@ -82,6 +85,8 @@ const INITIAL: State = {
   decisions: [],
   metrics: { tokens: 0, costUsd: 0, sources: 0 },
   done: false,
+  failedPhase: null,
+  failureNote: null,
 };
 
 function reduce(s: State, ev: RecordedEvent): State {
@@ -93,6 +98,20 @@ function reduce(s: State, ev: RecordedEvent): State {
       const id = `phase-${phase}-${status}-${ev.t}`;
       if (s.feed.some((f) => f.id === id)) return s;
       const phaseStatus = { ...s.phaseStatus, [phase]: status };
+      // Terminal failure: stop the spinner, show why, surface a retry CTA.
+      // Backend `_mark_failed` has already flipped Run.status to failed and
+      // emitted this event; we own the visual transition.
+      if (status === "failed") {
+        return {
+          ...s,
+          phaseStatus,
+          currentPhase: null,
+          done: true,
+          failedPhase: phase,
+          failureNote: note ?? null,
+          feed: [...s.feed, { id, t: ev.t, kind: "phase", phase, status, note }],
+        };
+      }
       const currentPhase =
         status === "started"
           ? phase
@@ -160,7 +179,9 @@ function reduce(s: State, ev: RecordedEvent): State {
   }
 }
 
-function findNextActive(s: Partial<Record<Phase, "started" | "completed">>): Phase | null {
+function findNextActive(
+  s: Partial<Record<Phase, "started" | "completed" | "failed">>,
+): Phase | null {
   for (const p of PHASE_ORDER) {
     if (s[p] === "started") return p;
   }
@@ -217,6 +238,18 @@ export function RunWatch({ runId, briefTitle, briefBody }: Props): React.ReactEl
         if (data.run.status === "succeeded" && !state.done) {
           setState((s) => ({ ...s, done: true, currentPhase: null }));
         }
+        if (data.run.status === "failed" && !state.failedPhase) {
+          // Terminal failure that we missed via SSE (e.g., page opened
+          // after the failure event was trimmed). Render the failure UI
+          // even without a specific phase pinpoint.
+          setState((s) => ({
+            ...s,
+            done: true,
+            currentPhase: null,
+            failedPhase: s.currentPhase ?? "architect",
+            failureNote: s.failureNote ?? "the run could not be completed",
+          }));
+        }
         const md = data.artifacts.find((a) => a.kind === "package_md")?.url;
         const pdf = data.artifacts.find((a) => a.kind === "package_pdf")?.url;
         setArtifacts({ md, pdf });
@@ -227,7 +260,7 @@ export function RunWatch({ runId, briefTitle, briefBody }: Props): React.ReactEl
     return () => {
       cancelled = true;
     };
-  }, [runId, state.done]);
+  }, [runId, state.done, state.failedPhase]);
 
   useEffect(() => {
     if (state.done) setConn("done");
@@ -250,11 +283,15 @@ export function RunWatch({ runId, briefTitle, briefBody }: Props): React.ReactEl
   // current phase's verb. This is what makes the wait feel like watching
   // an analyst work — the user always knows what JUST happened.
   const assertion = useMemo(() => {
+    if (state.failedPhase) {
+      const label = PHASE_LABELS[state.failedPhase] ?? state.failedPhase;
+      return `${label} couldn’t finish.`;
+    }
     if (state.done) return "Done. Your package is ready.";
     if (state.currentNote) return state.currentNote;
     if (state.currentPhase) return PHASE_LABELS[state.currentPhase] + "…";
     return "Connecting to the run…";
-  }, [state.done, state.currentNote, state.currentPhase]);
+  }, [state.done, state.failedPhase, state.currentNote, state.currentPhase]);
 
   return (
     <div className="bg-surface text-on-surface min-h-dvh w-full">
@@ -281,14 +318,23 @@ export function RunWatch({ runId, briefTitle, briefBody }: Props): React.ReactEl
       <main className="mx-auto w-full max-w-6xl px-6 pb-12 pt-8 md:px-10">
         {/* The headline — one assertion, one progress line. */}
         <section className="mb-8">
-          <p className="text-primary text-[10px] font-semibold uppercase tracking-[0.18em]">
-            {state.done ? "Complete" : "Working"}
+          <p
+            className={`text-[10px] font-semibold uppercase tracking-[0.18em] ${
+              state.failedPhase ? "text-error" : "text-primary"
+            }`}
+          >
+            {state.failedPhase ? "Failed" : state.done ? "Complete" : "Working"}
           </p>
           <h1 className="text-on-surface mt-1 max-w-3xl text-[28px] font-semibold leading-tight md:text-[34px]">
             {assertion}
           </h1>
           <p className="text-on-surface-variant mt-3 text-[13px] tabular-nums">
-            {state.done ? (
+            {state.failedPhase ? (
+              <>
+                {state.failureNote ?? "the run was stopped"} · stopped after {fmtMs(elapsed)} · you
+                won’t be charged for this run.
+              </>
+            ) : state.done ? (
               <>
                 Finished in {fmtMs(elapsed)} · {state.decisions.length} decision
                 {state.decisions.length === 1 ? "" : "s"} made · {state.metrics.sources} sources
@@ -312,7 +358,7 @@ export function RunWatch({ runId, briefTitle, briefBody }: Props): React.ReactEl
             aria-label="Run progress"
           >
             <motion.div
-              className="bg-primary h-full"
+              className={`${state.failedPhase ? "bg-error" : "bg-primary"} h-full`}
               initial={{ width: 0 }}
               animate={{ width: `${state.done ? 100 : progressPct}%` }}
               transition={expressiveDefault}
@@ -321,7 +367,7 @@ export function RunWatch({ runId, briefTitle, briefBody }: Props): React.ReactEl
         </section>
 
         {/* Editorial “while you wait” cards — educate, don’t fidget. */}
-        <WhileYouWait visible={!state.done} className="mb-8" />
+        <WhileYouWait visible={!state.done && !state.failedPhase} className="mb-8" />
 
         {/* Two columns: live feed + accumulating decisions. */}
         <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
@@ -337,7 +383,18 @@ export function RunWatch({ runId, briefTitle, briefBody }: Props): React.ReactEl
             <Stat label="sources" value={state.metrics.sources.toString()} />
           </div>
           <div className="flex items-center gap-2">
-            {state.done ? (
+            {state.failedPhase ? (
+              <>
+                <span className="text-on-surface-variant text-[11px]">
+                  No charge — try a fresh brief.
+                </span>
+                <Link href="/brief">
+                  <Button variant="filled" size="sm" className="gap-2">
+                    Start a new run <span aria-hidden>→</span>
+                  </Button>
+                </Link>
+              </>
+            ) : state.done ? (
               <>
                 {artifacts.md ? (
                   <a href={artifacts.md} download>
@@ -564,6 +621,9 @@ function FeedIcon({ item }: { item: FeedItem }): React.ReactElement {
     );
   }
   // phase
+  if (item.status === "failed") {
+    return <span aria-hidden className="bg-error mt-1.5 size-1.5 shrink-0 rounded-full" />;
+  }
   const completed = item.status === "completed";
   return (
     <span
@@ -577,11 +637,17 @@ function FeedIcon({ item }: { item: FeedItem }): React.ReactElement {
 
 function FeedBody({ item }: { item: FeedItem }): React.ReactElement {
   if (item.kind === "phase") {
+    const verb =
+      item.status === "started" ? "Starting" : item.status === "failed" ? "Failed" : "Done";
     return (
       <div className="min-w-0 flex-1">
         <p className="text-on-surface">
-          <span className="text-on-surface-variant text-[11px] uppercase tracking-wide">
-            {item.status === "started" ? "Starting" : "Done"}:
+          <span
+            className={`text-[11px] uppercase tracking-wide ${
+              item.status === "failed" ? "text-error" : "text-on-surface-variant"
+            }`}
+          >
+            {verb}:
           </span>{" "}
           {PHASE_LABELS[item.phase]}
         </p>
