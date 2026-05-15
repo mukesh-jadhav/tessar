@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field
 from tessar.config import settings
 from tessar.observability import (
     capture_exception,
+    get_tracer,
     init_observability,
     instrument_fastapi_app,
 )
