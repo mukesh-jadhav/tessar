@@ -17,10 +17,19 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .architecture import DataClass, EdgeKind, ScaleTier, ScaleTierLabel, Zone
+from .architecture import (
+    DataClass,
+    DeliverySemantics,
+    EdgeKind,
+    IntegrationMode,
+    ScaleTier,
+    ScaleTierLabel,
+    SequenceKind,
+    Zone,
+)
 from .cost import BomKind
 from .risks import Severity
-from .synthesis import DecisionConfidence
+from .synthesis import DecisionConfidence, FailureSeverity
 
 Reversibility = Literal["1-way", "2-way"]
 BlastRadius = Literal["service", "data", "platform"]
@@ -174,9 +183,74 @@ class PackageFlowStep(_TsModel):
     body: str
 
 
+class PackageSequenceDiagram(_TsModel):
+    """ADR-0006 sequence diagram (write/read/async)."""
+
+    id: str
+    kind: SequenceKind
+    title: str
+    summary: str
+    participants: list[str]
+    mermaid: str
+
+
+class PackageIntegrationContract(_TsModel):
+    """ADR-0006 integration contract (per critical edge)."""
+
+    edge_id: str = Field(alias="edgeId")
+    src: str = Field(alias="from")
+    to: str
+    mode: IntegrationMode
+    payload: str
+    idempotency: str
+    retry: str
+    semantics: DeliverySemantics
+    cite: int = Field(ge=1)
+
+
+class PackageComponentRationale(_TsModel):
+    """ADR-0006 \"fits because\" link from one node to one requirement."""
+
+    node_id: str = Field(alias="nodeId")
+    requirement_id: str = Field(alias="requirementId")
+    narrative: str
+    cite: int = Field(ge=1)
+
+
+class PackageFailureMode(_TsModel):
+    """ADR-0006 failure mode for one critical pick."""
+
+    id: str
+    decision_id: str = Field(alias="decisionId")
+    title: str
+    trigger: str
+    blast_radius: str = Field(alias="blastRadius")
+    detection: str
+    mitigation: str
+    severity: FailureSeverity
+    cite: int = Field(ge=1)
+
+
+class PackageBuildPhase(_TsModel):
+    """ADR-0006 phased build sequence step."""
+
+    id: str
+    order: int = Field(ge=1)
+    label: str
+    summary: str
+    components: list[str]
+    exit_criteria: str = Field(alias="exitCriteria")
+
+
 class RunPackage(_TsModel):
     """Complete contract emitted by the packager. JSON serialization with
-    `by_alias=True` produces the exact shape the web app consumes."""
+    `by_alias=True` produces the exact shape the web app consumes.
+
+    ADR-0006 fields (`sequence_diagrams`, `integration_contracts`,
+    `component_rationales`, `failure_modes`, `build_sequence`) are
+    optional during rollout; once the architect/synthesizer prompts emit
+    them, flip to required in the same PR.
+    """
 
     id: str
     generated_at: str = Field(alias="generatedAt")
@@ -198,4 +272,15 @@ class RunPackage(_TsModel):
     roadmap: list[RoadmapItem]
 
     flow_narrative: list[PackageFlowStep] = Field(alias="flowNarrative")
+    sequence_diagrams: list[PackageSequenceDiagram] = Field(
+        default_factory=list, alias="sequenceDiagrams"
+    )
+    integration_contracts: list[PackageIntegrationContract] = Field(
+        default_factory=list, alias="integrationContracts"
+    )
+    component_rationales: list[PackageComponentRationale] = Field(
+        default_factory=list, alias="componentRationales"
+    )
+    failure_modes: list[PackageFailureMode] = Field(default_factory=list, alias="failureModes")
+    build_sequence: list[PackageBuildPhase] = Field(default_factory=list, alias="buildSequence")
     sources: list[Source]

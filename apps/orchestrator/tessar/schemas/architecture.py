@@ -86,18 +86,77 @@ class FlowStep(BaseModel):
     body: str = Field(min_length=40, max_length=800)
 
 
+SequenceKind = Literal["write", "read", "async"]
+IntegrationMode = Literal["sync", "async"]
+DeliverySemantics = Literal["at-least-once", "exactly-once", "best-effort"]
+
+
+class SequenceDiagram(BaseModel):
+    """One Mermaid `sequenceDiagram` source + metadata. ADR-0006: the
+    architect emits exactly three (one per `SequenceKind`)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(pattern=r"^SEQ-(write|read|async)$", min_length=9, max_length=10)
+    kind: SequenceKind
+    title: str = Field(min_length=3, max_length=120)
+    summary: str = Field(min_length=20, max_length=600)
+    participants: list[str] = Field(min_length=2, max_length=12)
+    mermaid: str = Field(min_length=40, max_length=8000)
+
+
+class IntegrationContract(BaseModel):
+    """Wire-level agreement at one edge. ADR-0006."""
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    edge_id: str = Field(min_length=3, max_length=120, alias="edgeId")
+    src: str = Field(alias="from", min_length=3, max_length=8)
+    to: str = Field(min_length=3, max_length=8)
+    mode: IntegrationMode
+    payload: str = Field(min_length=4, max_length=400)
+    idempotency: str = Field(min_length=4, max_length=400)
+    retry: str = Field(min_length=4, max_length=400)
+    semantics: DeliverySemantics
+    cite: DecisionCitation
+
+
+class ComponentRationale(BaseModel):
+    """\"Fits because\" link from one architect pick to one requirement.
+    ADR-0006.
+    """
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    node_id: str = Field(pattern=r"^N-\d{1,3}$", min_length=3, max_length=8, alias="nodeId")
+    requirement_id: str = Field(min_length=1, max_length=40, alias="requirementId")
+    narrative: str = Field(min_length=40, max_length=1200)
+    cite: DecisionCitation
+
+
 class MermaidDiagrams(BaseModel):
-    """The three diagrams the packager renders to SVG/PNG via mermaid-cli."""
+    """C4 + data-flow Mermaid sources.
+
+    `sequence` is the legacy single sequence diagram. ADR-0006 supersedes
+    it with `Architecture.sequence_diagrams` (three: write/read/async).
+    Kept optional during rollout so older golden fixtures still validate.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     c4: str = Field(min_length=20, max_length=8000)
     data_flow: str = Field(min_length=20, max_length=8000)
-    sequence: str = Field(min_length=20, max_length=8000)
+    sequence: str | None = Field(default=None, min_length=20, max_length=8000)
 
 
 class Architecture(BaseModel):
-    """Full architect output for one run."""
+    """Full architect output for one run.
+
+    ADR-0006 fields (`sequence_diagrams`, `integration_contracts`,
+    `component_rationales`) are optional during rollout. Once the
+    architect prompt v2 lands and the agent admissibility checks enforce
+    them, flip these to required in the same PR that ships v2.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -105,4 +164,7 @@ class Architecture(BaseModel):
     edges: list[ArchEdge] = Field(min_length=3, max_length=60)
     flows: list[FlowStep] = Field(min_length=1, max_length=6)
     diagrams: MermaidDiagrams
+    sequence_diagrams: list[SequenceDiagram] = Field(default_factory=list, max_length=3)
+    integration_contracts: list[IntegrationContract] = Field(default_factory=list, max_length=20)
+    component_rationales: list[ComponentRationale] = Field(default_factory=list, max_length=20)
     notes: str | None = Field(default=None, max_length=1500)
