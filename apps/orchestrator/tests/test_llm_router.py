@@ -173,3 +173,62 @@ def test_budget_state_tracks_running_total() -> None:
     assert state.spent_usd > 0
     assert state.spent_tokens > 0
     assert state.remaining_usd < state.cap_usd
+
+
+# ─── router timeout (incident #stuck-at-56) ─────────────────────
+
+
+def test_router_times_out_hung_provider_and_falls_over() -> None:
+    """A provider that hangs past the per-tier deadline is treated as a
+    transient failure; the next provider in the chain handles the call."""
+    import time
+
+    from tessar.llm.providers.mock import MockLlmProvider
+
+    class HangingProvider(MockLlmProvider):
+        name = "hanging"
+
+        def generate(self, messages, *, tier, max_tokens, temperature):  # type: ignore[override]
+            time.sleep(5)  # would normally exceed our timeout
+            return super().generate(
+                messages, tier=tier, max_tokens=max_tokens, temperature=temperature
+            )
+
+    healthy = MockLlmProvider()
+    router = LlmRouter(
+        [HangingProvider(), healthy],
+        BudgetTracker(cap_usd=1.0, cap_tokens=10_000),
+        provider_timeout_s={Tier.A: 0.1, Tier.B: 0.1, Tier.C: 0.1},
+    )
+    resp = router.generate(
+        [LlmMessage(role="user", content="hi")],
+        agent_name="research_worker",
+    )
+    # Healthy provider answered after the hung one timed out.
+    assert resp.provider != "hanging"
+
+
+def test_router_raises_when_all_providers_time_out() -> None:
+    """If every provider hangs, router raises AllProvidersFailed (not a
+    bare timeout error) so callers can branch on the same exception."""
+    import time
+
+    from tessar.llm.providers.mock import MockLlmProvider
+
+    class Hanger(MockLlmProvider):
+        def generate(self, messages, *, tier, max_tokens, temperature):  # type: ignore[override]
+            time.sleep(5)
+            return super().generate(
+                messages, tier=tier, max_tokens=max_tokens, temperature=temperature
+            )
+
+    router = LlmRouter(
+        [Hanger(), Hanger()],
+        BudgetTracker(cap_usd=1.0, cap_tokens=10_000),
+        provider_timeout_s={Tier.A: 0.1, Tier.B: 0.1, Tier.C: 0.1},
+    )
+    with pytest.raises(AllProvidersFailed):
+        router.generate(
+            [LlmMessage(role="user", content="hi")],
+            agent_name="research_worker",
+        )

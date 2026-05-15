@@ -82,7 +82,9 @@ from tessar.canned_timeline import iter_with_delays
 from tessar.config import settings
 from tessar.db import get_engine, get_sessionmaker
 from tessar.db.models import ArtifactKind, Run, RunArtifact, RunEvent, RunStatus
+from tessar.llm.budget import BudgetExceeded
 from tessar.llm.factory import build_router
+from tessar.llm.router import AllProvidersFailed
 from tessar.redis_bus import publish as redis_publish
 from tessar.schemas import BriefGuide, BriefInput
 from tessar.search import build_search_client
@@ -565,6 +567,26 @@ async def run(run_id: str) -> None:
                     "phase": "architect",
                     "status": "failed",
                     "note": "architect produced ungrounded or topologically broken output twice",
+                },
+            },
+        )
+        return
+    except (AllProvidersFailed, BudgetExceeded) as e:
+        log.error("architect.failed", run_id=run_id, error=str(e), reason=type(e).__name__)
+        await _mark_failed(run_id)
+        await _emit(
+            run_id,
+            {
+                "kind": "phase",
+                "t": 4840,
+                "payload": {
+                    "phase": "architect",
+                    "status": "failed",
+                    "note": (
+                        "every LLM provider timed out or failed"
+                        if isinstance(e, AllProvidersFailed)
+                        else "per-run token budget exceeded"
+                    ),
                 },
             },
         )

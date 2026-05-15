@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Sequence
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from typing import TYPE_CHECKING
 
 from .budget import BudgetExceeded, BudgetTracker
@@ -35,6 +36,18 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
 log = logging.getLogger(__name__)
+
+# Per-tier hard wall-clock cap for a single provider.generate call.
+# Tier-A pro models can legitimately stream large JSON responses for ~60s;
+# we keep 3 minutes of headroom and treat anything beyond as hung. Without
+# this, a single hung HTTPS request to Vertex would block the whole run
+# until Cloud Run's 60-min task timeout kills the worker (symptom: run
+# stuck at the same phase forever — see incident #stuck-at-56).
+DEFAULT_PROVIDER_TIMEOUT_S: dict[Tier, float] = {
+    Tier.A: 180.0,
+    Tier.B: 90.0,
+    Tier.C: 60.0,
+}
 
 
 class AllProvidersFailed(RuntimeError):
@@ -48,11 +61,21 @@ class LlmRouter:
         self,
         providers: Sequence[LlmProvider],
         budget: BudgetTracker,
+        *,
+        provider_timeout_s: dict[Tier, float] | None = None,
     ) -> None:
         if not providers:
             raise ValueError("LlmRouter requires at least one provider")
         self._providers = list(providers)
         self._budget = budget
+        self._timeouts = provider_timeout_s or DEFAULT_PROVIDER_TIMEOUT_S
+        # One executor per router; a router lives for one run, so the
+        # executor disappears with it. We allow a few worker threads so
+        # that a hung call (which we abandon at the timeout) does not
+        # block the *next* provider in the fallback chain — Python has
+        # no safe way to cancel the running thread, so it lingers until
+        # the SDK call returns.
+        self._executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="llm-call")
 
     @property
     def budget(self) -> BudgetTracker:
@@ -89,7 +112,8 @@ class LlmRouter:
             self._budget.precheck(est_cost_usd=est_cost, est_tokens=prompt_tokens + max_tokens)
 
             try:
-                response = provider.generate(
+                response = self._call_with_timeout(
+                    provider,
                     messages,
                     tier=resolved_tier,
                     max_tokens=max_tokens,
@@ -135,6 +159,43 @@ class LlmRouter:
             f"all {len(candidates)} provider(s) for tier {resolved_tier.value} "
             f"raised TransientProviderError; last={last_transient}"
         )
+
+    def _call_with_timeout(
+        self,
+        provider: LlmProvider,
+        messages: Sequence[LlmMessage],
+        *,
+        tier: Tier,
+        max_tokens: int,
+        temperature: float,
+    ) -> LlmResponse:
+        """Run `provider.generate` on a worker thread with a hard wall-clock
+        cap. On timeout, raise `TransientProviderError` so the router falls
+        over to the next provider in the chain. The orphan thread keeps
+        running in the background until the SDK call returns or the worker
+        process exits — we accept the leak rather than partially apply
+        Python's lack of safe thread cancellation.
+        """
+        deadline = self._timeouts.get(tier, 120.0)
+        future = self._executor.submit(
+            provider.generate,
+            messages,
+            tier=tier,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+        try:
+            return future.result(timeout=deadline)
+        except FuturesTimeoutError as e:
+            log.warning(
+                "llm.timeout provider=%s tier=%s deadline_s=%.2f",
+                provider.name,
+                tier.value,
+                deadline,
+            )
+            raise TransientProviderError(
+                f"{provider.name}: timed out after {deadline:g}s"
+            ) from e
 
 
 def _approx_prompt_tokens(messages: Iterable[LlmMessage]) -> int:
