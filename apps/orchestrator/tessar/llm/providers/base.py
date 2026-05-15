@@ -17,6 +17,22 @@ class TransientProviderError(RuntimeError):
     """
 
 
+class OutputTruncatedError(RuntimeError):
+    """The model returned a response that hit `max_output_tokens` mid-output
+    (Vertex `finish_reason == MAX_TOKENS`, OpenAI `finish_reason == "length"`).
+
+    Distinct from `TransientProviderError` because falling back to a different
+    provider with the same budget will not help — only the calling agent knows
+    whether retrying with a larger budget is safe (cost) or whether to give up.
+    Agents that produce strict JSON (architect, synthesizer) should catch this
+    and retry on the same provider with a higher `max_tokens`.
+    """
+
+    def __init__(self, message: str, *, partial_text: str = "") -> None:
+        super().__init__(message)
+        self.partial_text = partial_text
+
+
 class LlmProvider(ABC):
     """Adapter for one LLM vendor (e.g. Vertex Gemini)."""
 

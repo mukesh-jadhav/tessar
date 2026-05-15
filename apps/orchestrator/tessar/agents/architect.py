@@ -27,6 +27,7 @@ from pydantic import ValidationError
 
 from tessar.kb import KbRecord
 from tessar.llm import LlmMessage, LlmRouter
+from tessar.llm.providers.base import OutputTruncatedError
 from tessar.paths import repo_root as _repo_root
 from tessar.schemas import (
     Architecture,
@@ -208,36 +209,73 @@ def architect(
     kb_ids = {r.id for r in kb_candidates}
     finding_ids = {f.question_id for f in findings.findings}
 
-    response = router.generate(messages, agent_name=AGENT_NAME, max_tokens=16000, temperature=0.2)
+    # Architect output is the largest JSON in the graph (nodes + edges + flows
+    # + per-node `why`/`alts`/`scale`). 16k was empirically too tight on rich
+    # briefs (Vertex 2.5-pro returned `finish_reason=MAX_TOKENS` mid-string).
+    # Start at 24k; if the provider still truncates, the catch below retries
+    # at 2× budget on the same provider.
+    initial_budget = 24000
+    truncated_budget = 48000
 
     first_err: str | None = None
+    response_text = ""
+    truncated_first = False
     try:
+        response = router.generate(
+            messages, agent_name=AGENT_NAME, max_tokens=initial_budget, temperature=0.2
+        )
+        response_text = response.text
         arch = _parse(response.text)
         admissibility = _admissibility_errors(arch, kb_ids=kb_ids, finding_ids=finding_ids)
         if not admissibility:
             return arch
         first_err = "Architecture rejected:\n- " + "\n- ".join(admissibility)
+    except OutputTruncatedError as trunc:
+        truncated_first = True
+        first_err = str(trunc)
+        response_text = trunc.partial_text
     except (ValidationError, json.JSONDecodeError) as e:
         first_err = str(e)
+        # Treat unterminated-string parse failures as latent truncation —
+        # the symptom of MAX_TOKENS when the SDK doesn't surface finish_reason.
+        if "Unterminated string" in first_err or "Unexpected end" in first_err:
+            truncated_first = True
 
-    retry_messages: list[LlmMessage] = [
-        *messages,
-        LlmMessage(role="assistant", content=response.text),
-        LlmMessage(
-            role="user",
-            content=(
-                "Your previous response was rejected:\n\n"
-                f"{first_err}\n\n"
-                "Output a corrected JSON object only. No prose, no fences. "
-                "Every node.cite MUST reference a supplied KB id or a RQ-NN "
-                "with a finding. Every edge from/to and every flow.nodes[] "
-                "entry MUST reference a defined node id. No self-loops."
+    if truncated_first:
+        # The model wasn't wrong about content — we just under-budgeted.
+        # Re-issue the ORIGINAL prompt at the larger budget; do not append
+        # a conversational "you were rejected" turn (it confuses the model
+        # and wastes prompt tokens).
+        retry_messages = list(messages)
+        retry_budget = truncated_budget
+    else:
+        retry_messages = [
+            *messages,
+            LlmMessage(role="assistant", content=response_text or "<empty>"),
+            LlmMessage(
+                role="user",
+                content=(
+                    "Your previous response was rejected:\n\n"
+                    f"{first_err}\n\n"
+                    "Output a corrected JSON object only. No prose, no fences. "
+                    "Every node.cite MUST reference a supplied KB id or a RQ-NN "
+                    "with a finding. Every edge from/to and every flow.nodes[] "
+                    "entry MUST reference a defined node id. No self-loops."
+                ),
             ),
-        ),
-    ]
-    retry = router.generate(
-        retry_messages, agent_name=AGENT_NAME, max_tokens=16000, temperature=0.2
-    )
+        ]
+        retry_budget = initial_budget
+
+    try:
+        retry = router.generate(
+            retry_messages, agent_name=AGENT_NAME, max_tokens=retry_budget, temperature=0.2
+        )
+    except OutputTruncatedError as trunc:
+        raise ArchitectureError(
+            "architect produced output that exceeded max_output_tokens twice",
+            raw_text=trunc.partial_text,
+            validation_error=str(trunc),
+        ) from trunc
     try:
         arch = _parse(retry.text)
     except (ValidationError, json.JSONDecodeError) as second_err:

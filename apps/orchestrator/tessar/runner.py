@@ -409,6 +409,21 @@ async def run(run_id: str) -> None:
             },
         },
     )
+
+    # Aggregate distinct error reasons so Cloud Logging shows WHY workers
+    # failed (previous behaviour only logged the count, which made chronic
+    # search outages invisible). Truncate each reason at 200 chars and cap
+    # the sample at 5 distinct reasons.
+    error_sample: list[str] = []
+    seen_reasons: set[str] = set()
+    for err in findings.errors:
+        reason = (err.reason or "")[:200]
+        if reason and reason not in seen_reasons:
+            seen_reasons.add(reason)
+            error_sample.append(f"{err.question_id}: {reason}")
+            if len(error_sample) >= 5:
+                break
+
     log.info(
         "research_workers.ok",
         run_id=run_id,
@@ -416,6 +431,7 @@ async def run(run_id: str) -> None:
         n_errors=n_failed,
         n_sources=n_sources,
         spent_usd=spend.spent_usd,
+        error_sample=error_sample,
     )
 
     # ── Phase 3.7: real synthesizer (first Tier-A node) ──────────

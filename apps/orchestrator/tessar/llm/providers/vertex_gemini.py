@@ -27,7 +27,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from ..types import LlmMessage, LlmResponse, LlmUsage, Tier
-from .base import LlmProvider, TransientProviderError
+from .base import LlmProvider, OutputTruncatedError, TransientProviderError
 
 log = logging.getLogger(__name__)
 
@@ -183,10 +183,45 @@ class VertexGeminiProvider(LlmProvider):
 
         # Extract text + token usage. The SDK returns a `GenerationResponse`
         # with `.text` and `.usage_metadata.{prompt,candidates,total}_token_count`.
-        text = (result.text or "").strip()
+        # We also pull `finish_reason` from the first candidate so that
+        # MAX_TOKENS truncation surfaces as a typed error rather than as
+        # downstream JSON parse failures.
         usage_meta = getattr(result, "usage_metadata", None)
         prompt_tokens = int(getattr(usage_meta, "prompt_token_count", 0) or 0)
         completion_tokens = int(getattr(usage_meta, "candidates_token_count", 0) or 0)
+
+        finish_reason_str = ""
+        candidates = getattr(result, "candidates", None) or []
+        if candidates:
+            fr = getattr(candidates[0], "finish_reason", None)
+            # SDK may give us an enum, an int, or a string — normalise to name.
+            finish_reason_str = getattr(fr, "name", None) or str(fr) if fr is not None else ""
+
+        log.info(
+            "vertex_gemini.ok model=%s tier=%s prompt_tokens=%d completion_tokens=%d "
+            "max_tokens=%d finish_reason=%s",
+            model_id,
+            tier.value,
+            prompt_tokens,
+            completion_tokens,
+            max_tokens,
+            finish_reason_str or "UNKNOWN",
+        )
+
+        # `result.text` raises if there is no candidate content (e.g. SAFETY
+        # block or pure-MAX_TOKENS truncation with no emitted text). Guard it.
+        try:
+            text = (result.text or "").strip()
+        except (ValueError, AttributeError):
+            text = ""
+
+        if "MAX_TOKENS" in finish_reason_str.upper():
+            raise OutputTruncatedError(
+                f"vertex_gemini: response truncated at max_output_tokens={max_tokens} "
+                f"(model={model_id}, completion_tokens={completion_tokens}, "
+                f"finish_reason={finish_reason_str})",
+                partial_text=text,
+            )
 
         rates = self._pricing[tier]
         cost_usd = (
