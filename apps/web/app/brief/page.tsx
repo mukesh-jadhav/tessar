@@ -1,11 +1,10 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { AppShell } from "@/components/shell/app-shell";
 import { springs } from "@/lib/motion/springs";
 import { PRICE_PER_RUN_LABEL } from "@/lib/pricing";
 
@@ -272,57 +271,7 @@ export default function BriefPage(): React.ReactElement {
   };
 
   return (
-    <div className="bg-surface text-on-surface relative min-h-dvh w-full">
-      {/* Soft brand wash + hairline grid — same canvas language as / and /decide. */}
-      <div
-        aria-hidden
-        className="pointer-events-none fixed inset-0"
-        style={{
-          background:
-            "radial-gradient(60% 50% at 88% 12%, rgb(var(--md-sys-color-primary) / 0.10), transparent 70%), radial-gradient(50% 40% at 10% 92%, rgb(var(--md-sys-color-primary) / 0.06), transparent 70%)",
-        }}
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none fixed inset-0 opacity-[0.025]"
-        style={{
-          backgroundImage:
-            "linear-gradient(rgb(var(--md-sys-color-on-surface)) 1px, transparent 1px), linear-gradient(90deg, rgb(var(--md-sys-color-on-surface)) 1px, transparent 1px)",
-          backgroundSize: "56px 56px",
-        }}
-      />
-
-      {/* Top chrome — compact, same shape used on /run/[id] and /decide/[id]. */}
-      <header className="border-outline-variant/60 bg-surface/80 sticky top-0 z-30 flex items-center justify-between gap-3 border-b px-6 py-3 backdrop-blur md:px-10">
-        <Link href="/" className="flex items-center gap-2.5">
-          <span
-            aria-hidden
-            className="bg-primary text-on-primary grid size-7 place-items-center rounded-full shadow-[0_4px_14px_-6px_rgb(var(--md-sys-color-primary)/0.5)]"
-          >
-            <svg width="12" height="12" viewBox="0 0 11 11" fill="none">
-              <path
-                d="M1.5 5.6 L4.2 8 L9 2.5"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </span>
-          <span className="text-[13px] font-semibold tracking-tight">TESSAR</span>
-          <span className="text-on-surface-variant text-[11px]">· new brief</span>
-        </Link>
-        <div className="flex items-center gap-2">
-          <ThemeToggle />
-          <Link
-            href="/dashboard"
-            className="text-on-surface-variant hover:text-on-surface rounded-full px-3 py-1.5 text-[11.5px] font-semibold"
-          >
-            Dashboard
-          </Link>
-        </div>
-      </header>
-
+    <AppShell pageLabel="new brief">
       {/* Main column — single, narrow, focused. Page scrolls past the fold. */}
       <main className="relative mx-auto w-full max-w-[760px] px-5 pb-32 pt-10 md:px-8 md:pt-16">
         <motion.div
@@ -573,7 +522,7 @@ export default function BriefPage(): React.ReactElement {
           </Button>
         </div>
       </div>
-    </div>
+    </AppShell>
   );
 }
 

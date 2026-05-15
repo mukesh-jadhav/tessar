@@ -4,9 +4,9 @@ import { motion } from "motion/react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+import { AppShell } from "@/components/shell/app-shell";
 import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { type RunStatus, type RunSummary } from "@/lib/mocks/past-runs";
 import { springs } from "@/lib/motion/springs";
 
@@ -75,63 +75,7 @@ export default function DashboardPage(): React.ReactElement {
   }, [runs]);
 
   return (
-    <div className="bg-surface text-on-surface relative min-h-dvh w-full overflow-x-hidden">
-      {/* Canvas backdrop — same language as / */}
-      <div
-        aria-hidden
-        className="pointer-events-none fixed inset-0"
-        style={{
-          background:
-            "radial-gradient(60% 50% at 88% 12%, rgb(var(--md-sys-color-primary) / 0.10), transparent 70%), radial-gradient(50% 40% at 10% 92%, rgb(var(--md-sys-color-primary) / 0.06), transparent 70%)",
-        }}
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none fixed inset-0 opacity-[0.025]"
-        style={{
-          backgroundImage:
-            "linear-gradient(rgb(var(--md-sys-color-on-surface)) 1px, transparent 1px), linear-gradient(90deg, rgb(var(--md-sys-color-on-surface)) 1px, transparent 1px)",
-          backgroundSize: "56px 56px",
-        }}
-      />
-
-      <header className="border-outline-variant/60 bg-surface/80 sticky top-0 z-20 flex items-center justify-between gap-3 border-b px-6 py-3 backdrop-blur md:px-10">
-        <div className="flex items-center gap-3">
-          <Link href="/" className="flex items-center gap-2.5">
-            <span
-              aria-hidden
-              className="bg-primary text-on-primary grid size-7 place-items-center rounded-full shadow-[0_4px_14px_-6px_rgb(var(--md-sys-color-primary)/0.5)]"
-            >
-              <svg width="12" height="12" viewBox="0 0 11 11" fill="none">
-                <path
-                  d="M1.5 5.6 L4.2 8 L9 2.5"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </span>
-            <span className="text-[13px] font-semibold tracking-tight">TESSAR</span>
-          </Link>
-          <span className="text-on-surface-variant text-[11px]">· dashboard</span>
-        </div>
-        <nav className="flex items-center gap-1.5 text-[11.5px]">
-          <Link
-            href="/billing"
-            className="text-on-surface-variant hover:bg-on-surface/[0.04] hover:text-on-surface rounded-full px-3 py-1.5 font-medium"
-          >
-            Billing
-          </Link>
-          <ThemeToggle />
-          <Link href="/brief">
-            <Button className="ml-1 rounded-full px-3.5 py-1.5 text-[11.5px] font-semibold">
-              New run +
-            </Button>
-          </Link>
-        </nav>
-      </header>
-
+    <AppShell pageLabel="dashboard">
       <main className="relative z-10 mx-auto max-w-[1200px] px-6 py-10 md:px-10 md:py-14">
         {!loaded ? null : runs.length === 0 ? (
           <EmptyHero />
@@ -143,7 +87,7 @@ export default function DashboardPage(): React.ReactElement {
           </>
         )}
       </main>
-    </div>
+    </AppShell>
   );
 }
 
