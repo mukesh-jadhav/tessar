@@ -315,7 +315,7 @@ const ZONE_COLORS: Record<Zone, string> = {
   external: "rgb(var(--md-sys-color-surface-container))",
 };
 
-function ArchitectureDiagram({
+export function ArchitectureDiagram({
   nodes,
   edges,
   focus,
@@ -427,7 +427,13 @@ function ArchitectureDiagram({
   );
 }
 
-function NodeDetail({ node, sources }: { node: ArchNode; sources: Source[] }): React.ReactElement {
+export function NodeDetail({
+  node,
+  sources,
+}: {
+  node: ArchNode;
+  sources: Source[];
+}): React.ReactElement {
   const cite = sources.find((s) => s.id === node.cite);
   return (
     <div className="space-y-4 text-[13px]">
@@ -570,7 +576,7 @@ function DecisionsTab({ pkg }: { pkg: RunPackage }): React.ReactElement {
   );
 }
 
-function DecisionCard({
+export function DecisionCard({
   decision,
   sources,
 }: {
@@ -639,7 +645,7 @@ function RisksTab({ pkg }: { pkg: RunPackage }): React.ReactElement {
   );
 }
 
-function RiskCard({ risk, sources }: { risk: Risk; sources: Source[] }): React.ReactElement {
+export function RiskCard({ risk, sources }: { risk: Risk; sources: Source[] }): React.ReactElement {
   const cite = sources.find((s) => s.id === risk.cite);
   const sevColor =
     risk.severity === "high"
@@ -759,7 +765,7 @@ function FlowStepItem({ index, step }: { index: number; step: FlowStep }): React
   );
 }
 
-function fmtUsd(n: number): string {
+export function fmtUsd(n: number): string {
   if (!Number.isFinite(n)) return "—";
   return new Intl.NumberFormat(undefined, {
     style: "currency",

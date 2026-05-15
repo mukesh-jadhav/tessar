@@ -319,7 +319,7 @@ export default function RunPage({
             </span>
             {state.done ? (
               <div className="flex items-center gap-2">
-                <Link href={`/run/${id}/package`} aria-label="Open the design package">
+                <Link href={`/decide/${id}`} aria-label="Open the design package">
                   <Button
                     variant="filled"
                     className="gap-2 rounded-full px-5 py-2 text-[12.5px] font-semibold"
