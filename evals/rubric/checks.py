@@ -55,6 +55,10 @@ _CITED_FIELDS_SCHEMA: dict[str, str] = {
     "decisions": "decision",
     "bom": "BOM line",
     "risks": "risk",
+    # ADR-0006 narrative fields that carry a `cite`
+    "integrationContracts": "integration contract",
+    "componentRationales": "component rationale",
+    "failureModes": "failure mode",
 }
 
 
@@ -232,6 +236,121 @@ def cost_realism(
 
 def _norm(s: str) -> str:
     return "".join(c.lower() for c in s if c.isalnum())
+
+
+# ─── Auto-axis: ADR-0006 narrative completeness ─────────────────
+
+
+def adr0006_completeness(pkg_dict: dict[str, Any]) -> AxisScore:
+    """Structural coverage of the 5 ADR-0006 narrative artifacts.
+
+    Score = 10 × (passed_checks / total_checks) over these checks:
+      1. `sequenceDiagrams` covers exactly {write, read, async}.
+      2. `integrationContracts` non-empty AND every contract's
+         `(from, to)` matches a real edge.
+      3. `componentRationales` non-empty AND each `requirementId`
+         resolves to a real `requirements[].id`.
+      4. `failureModes` covers every node whose `failureDomain` is
+         non-empty (architect must fail-mode every fragile node).
+      5. `buildSequence` has between 3 and 6 phases AND every node
+         referenced in `phase.nodes` exists in `nodes[]`.
+
+    This is structural only — judge prompts in
+    `evals/rubric/judge_prompts/{sequence_diagrams,integration_contracts,
+    component_rationales,failure_modes,build_sequence}.md` cover quality.
+    """
+    findings: list[str] = []
+    passed = 0
+    total = 5
+
+    # 1. sequence diagram kinds
+    seqs = pkg_dict.get("sequenceDiagrams") or []
+    seq_kinds = {s.get("kind") for s in seqs if isinstance(s, dict)}
+    if seq_kinds == {"write", "read", "async"}:
+        passed += 1
+    else:
+        findings.append(
+            f"sequenceDiagrams cover {sorted(k for k in seq_kinds if k)} — "
+            "expected {'write', 'read', 'async'}."
+        )
+
+    # 2. integration contracts grounded in edges
+    contracts = pkg_dict.get("integrationContracts") or []
+    edges = pkg_dict.get("edges") or []
+    edge_pairs = {(e.get("from"), e.get("to")) for e in edges if isinstance(e, dict)}
+    if contracts and all(
+        isinstance(c, dict) and (c.get("from"), c.get("to")) in edge_pairs
+        for c in contracts
+    ):
+        passed += 1
+    elif not contracts:
+        findings.append("integrationContracts is empty.")
+    else:
+        bad = [
+            (c.get("from"), c.get("to"))
+            for c in contracts
+            if isinstance(c, dict) and (c.get("from"), c.get("to")) not in edge_pairs
+        ]
+        findings.append(f"integrationContracts reference unknown edges: {bad}.")
+
+    # 3. component rationales link to real requirements
+    rationales = pkg_dict.get("componentRationales") or []
+    req_ids = {
+        r.get("id") for r in pkg_dict.get("requirements", []) if isinstance(r, dict)
+    }
+    if rationales and all(
+        isinstance(r, dict) and r.get("requirementId") in req_ids for r in rationales
+    ):
+        passed += 1
+    elif not rationales:
+        findings.append("componentRationales is empty.")
+    else:
+        bad = [
+            r.get("requirementId")
+            for r in rationales
+            if isinstance(r, dict) and r.get("requirementId") not in req_ids
+        ]
+        findings.append(f"componentRationales reference unknown requirements: {bad}.")
+
+    # 4. failure modes cover every fragile node
+    fragile_nodes = {
+        n.get("id")
+        for n in pkg_dict.get("nodes", [])
+        if isinstance(n, dict) and n.get("failureDomain")
+    }
+    fm_nodes = {
+        f.get("nodeId") for f in pkg_dict.get("failureModes", []) if isinstance(f, dict)
+    }
+    missing = fragile_nodes - fm_nodes
+    if not missing:
+        passed += 1
+    else:
+        findings.append(
+            f"failureModes missing entries for fragile nodes: {sorted(missing)}."
+        )
+
+    # 5. build sequence size + node refs
+    phases = pkg_dict.get("buildSequence") or []
+    node_ids = {n.get("id") for n in pkg_dict.get("nodes", []) if isinstance(n, dict)}
+    bp_refs = {
+        ref for p in phases if isinstance(p, dict) for ref in (p.get("nodes") or [])
+    }
+    if 3 <= len(phases) <= 6 and bp_refs.issubset(node_ids):
+        passed += 1
+    elif not (3 <= len(phases) <= 6):
+        findings.append(
+            f"buildSequence has {len(phases)} phases — ADR-0006 requires 3–6."
+        )
+    else:
+        findings.append(
+            f"buildSequence references unknown nodes: {sorted(bp_refs - node_ids)}."
+        )
+
+    score = 10.0 * passed / total
+    findings.insert(
+        0, f"{passed}/{total} ADR-0006 structural checks passed ({score:.1f}/10)."
+    )
+    return AxisScore(axis="adr0006_completeness", score=score, findings=findings)
 
 
 # ─── Convenience: load a package JSON file ───────────────────────

@@ -129,19 +129,22 @@ def _admissibility_errors(
 ) -> list[str]:
     """Return a list of human-readable errors for citations that
     reference unknown KB ids or RQ-NNs without findings. Empty list
-    means every citation is grounded."""
+    means clean."""
     errors: list[str] = []
+
+    def _check_cite(label: str, kind: str, ref: str) -> None:
+        if kind == "kb" and ref not in kb_ids:
+            errors.append(f"{label} cites kb:{ref!r} but that KB id was not supplied")
+        elif kind == "finding" and ref not in finding_ids:
+            errors.append(
+                f"{label} cites finding:{ref!r} but no such finding was returned "
+                "(it may have failed; failed questions are not evidence)"
+            )
+
     for decision in synthesis.decisions:
         for cite in decision.citations:
-            if cite.kind == "kb" and cite.ref not in kb_ids:
-                errors.append(
-                    f"{decision.id} cites kb:{cite.ref!r} but that KB id was not supplied"
-                )
-            elif cite.kind == "finding" and cite.ref not in finding_ids:
-                errors.append(
-                    f"{decision.id} cites finding:{cite.ref!r} but no such finding "
-                    "was returned (it may have failed; failed questions are not evidence)"
-                )
+            _check_cite(decision.id, cite.kind, cite.ref)
+
     return errors
 
 

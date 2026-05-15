@@ -29,7 +29,7 @@ from .architecture import (
 )
 from .cost import BomKind
 from .risks import Severity
-from .synthesis import DecisionConfidence, FailureSeverity
+from .synthesis import DecisionConfidence
 
 Reversibility = Literal["1-way", "2-way"]
 BlastRadius = Literal["service", "data", "platform"]
@@ -218,16 +218,15 @@ class PackageComponentRationale(_TsModel):
 
 
 class PackageFailureMode(_TsModel):
-    """ADR-0006 failure mode for one critical pick."""
+    """ADR-0006 per-node failure mode entry."""
 
     id: str
-    decision_id: str = Field(alias="decisionId")
-    title: str
-    trigger: str
-    blast_radius: str = Field(alias="blastRadius")
+    node_id: str = Field(alias="nodeId")
+    mode: str
     detection: str
-    mitigation: str
-    severity: FailureSeverity
+    recovery: str
+    rto: str
+    rpo: str
     cite: int = Field(ge=1)
 
 
@@ -235,11 +234,10 @@ class PackageBuildPhase(_TsModel):
     """ADR-0006 phased build sequence step."""
 
     id: str
-    order: int = Field(ge=1)
     label: str
-    summary: str
-    components: list[str]
-    exit_criteria: str = Field(alias="exitCriteria")
+    title: str
+    nodes: list[str]
+    rationale: str
 
 
 class RunPackage(_TsModel):

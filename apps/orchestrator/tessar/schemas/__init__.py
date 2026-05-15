@@ -15,10 +15,12 @@ from .architecture import (
     ArchEdge,
     Architecture,
     ArchNode,
+    BuildPhase,
     ComponentRationale,
     DataClass,
     DeliverySemantics,
     EdgeKind,
+    FailureMode,
     FlowStep,
     IntegrationContract,
     IntegrationMode,
@@ -102,13 +104,10 @@ from .run_package import (
 )
 from .synthesis import (
     AlternativeConsidered,
-    BuildPhase,
     CitationKind,
     Decision,
     DecisionCitation,
     DecisionConfidence,
-    FailureMode,
-    FailureSeverity,
     Synthesis,
 )
 
@@ -143,7 +142,6 @@ __all__ = [
     "Domain",
     "EdgeKind",
     "FailureMode",
-    "FailureSeverity",
     "FlowStep",
     "FunctionalReq",
     "IntegrationContract",

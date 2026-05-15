@@ -201,11 +201,11 @@ export interface RunPackage {
   risks: Risk[];
   roadmap: RoadmapItem[];
   flowNarrative: FlowStep[];
-  // ADR-0006 — optional during prototype, required at MVP launch.
-  sequenceDiagrams?: SequenceDiagram[];
-  integrationContracts?: IntegrationContract[];
-  componentRationales?: ComponentRationale[];
-  failureModes?: FailureMode[];
-  buildSequence?: BuildPhase[];
+  // ADR-0006 — required at MVP launch (architect always emits these).
+  sequenceDiagrams: SequenceDiagram[];
+  integrationContracts: IntegrationContract[];
+  componentRationales: ComponentRationale[];
+  failureModes: FailureMode[];
+  buildSequence: BuildPhase[];
   sources: Source[];
 }

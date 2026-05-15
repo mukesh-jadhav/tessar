@@ -36,13 +36,20 @@ evals/
   `RunPackage` JSON: groundedness, schema validity, cost realism.
 - 3 seed scenarios committed; scenario JSON Schema documented.
 - Scoring + bar evaluation logic working.
+- **ADR-0006 structural axis** (`adr0006_completeness`) checks coverage of
+  the 5 narrative artifacts (`sequenceDiagrams`, `integrationContracts`,
+  `componentRationales`, `failureModes`, `buildSequence`). Reportable today;
+  becomes a hard gate once judges are wired.
+- **ADR-0006 judge prompts** (`judge_prompts/{sequence_diagrams,integration_contracts,component_rationales,failure_modes,build_sequence}.md`)
+  ready for the LLM router.
 
 ## What lands in Phase 3.4
 
 - Judge axes (3, 4, 6) wired through the LLM router (Phase 3.2 dependency).
 - Nightly GitHub Actions workflow running the full suite against `dev`.
 - PR gate (auto-axes only) wired into `pr.yml`.
-- **ADR-0006 narrative graders** (5 new judge prompts; coherence + grounding for `sequenceDiagrams`, `integrationContracts`, `componentRationales`, `failureModes`, `buildSequence`). Bar must absorb these before paid checkout flips on in prod.
+- **ADR-0006 narrative judge wiring** — bar must absorb these before paid
+  checkout flips on in prod.
 
 ## Run locally
 

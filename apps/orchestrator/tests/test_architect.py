@@ -348,14 +348,193 @@ def _good_payload() -> dict[str, object]:
             "data_flow": (
                 "flowchart LR\n  N1[Browser] --> N2[Cloud Run]\n  N2 -.-> N3[(Cloud SQL)]"
             ),
-            "sequence": (
-                "sequenceDiagram\n  actor U as User\n"
-                "  participant W as Cloud Run web\n"
-                "  participant DB as Cloud SQL\n"
-                "  U->>W: POST /runs\n  W->>DB: INSERT run\n"
-                "  W-->>U: SSE stream"
-            ),
         },
+        "sequence_diagrams": [
+            {
+                "id": "SEQ-write",
+                "kind": "write",
+                "title": "Submit a brief",
+                "summary": (
+                    "User posts a brief from the browser; the web service "
+                    "writes a Run row and returns 202."
+                ),
+                "participants": ["User", "Browser", "Cloud Run (web)", "Cloud SQL Postgres"],
+                "mermaid": (
+                    "sequenceDiagram\n"
+                    "  actor U as User\n"
+                    "  participant B as Browser\n"
+                    "  participant W as Cloud Run web\n"
+                    "  participant DB as Cloud SQL\n"
+                    "  U->>B: fill form\n"
+                    "  B->>W: POST /runs\n"
+                    "  W->>DB: INSERT run\n"
+                    "  W-->>B: 202 + runId"
+                ),
+            },
+            {
+                "id": "SEQ-read",
+                "kind": "read",
+                "title": "Stream live progress",
+                "summary": (
+                    "Browser opens an SSE stream to the web service which "
+                    "tails progress events from the database."
+                ),
+                "participants": ["Browser", "Cloud Run (web)", "Cloud SQL Postgres"],
+                "mermaid": (
+                    "sequenceDiagram\n"
+                    "  participant B as Browser\n"
+                    "  participant W as Cloud Run web\n"
+                    "  participant DB as Cloud SQL\n"
+                    "  B->>W: GET /runs/:id/stream\n"
+                    "  loop while running\n"
+                    "    W->>DB: SELECT events WHERE id>cursor\n"
+                    "    W-->>B: data: event\n"
+                    "  end"
+                ),
+            },
+            {
+                "id": "SEQ-async",
+                "kind": "async",
+                "title": "Stripe webhook reconciles a run",
+                "summary": (
+                    "Stripe posts session.completed; web verifies the "
+                    "signature and marks the run paid; retries on failure."
+                ),
+                "participants": ["Stripe", "Cloud Run (web)", "Cloud SQL Postgres"],
+                "mermaid": (
+                    "sequenceDiagram\n"
+                    "  participant S as Stripe\n"
+                    "  participant W as Cloud Run web\n"
+                    "  participant DB as Cloud SQL\n"
+                    "  S->>W: POST /webhooks/stripe\n"
+                    "  W->>DB: UPDATE run SET paid=true\n"
+                    "  Note over S,W: 5s timeout, expo backoff, DLQ on exhaust"
+                ),
+            },
+        ],
+        "integration_contracts": [
+            {
+                "edge_id": "N-02->>-N-03",
+                "from": "N-02",
+                "to": "N-03",
+                "mode": "sync",
+                "payload": "Postgres SQL via Cloud SQL connector; rows ≤ 64KB.",
+                "idempotency": "Receiver upserts by (runId); writes are transactional.",
+                "retry": "5s timeout; 1s expo backoff; 3 attempts; surface 5xx on exhaust.",
+                "semantics": "exactly-once",
+                "cite": {"kind": "kb", "ref": "gcp.cloud-sql-postgres"},
+            },
+            {
+                "edge_id": "N-04->>-N-02",
+                "from": "N-04",
+                "to": "N-02",
+                "mode": "async",
+                "payload": "Stripe webhook JSON ≤ 8KB with signature header.",
+                "idempotency": "Stripe event-id stored; duplicate posts no-op.",
+                "retry": "5s timeout; expo backoff 1s→30s; 5 attempts; DLQ on exhaust.",
+                "semantics": "at-least-once",
+                "cite": {"kind": "kb", "ref": "gcp.cloud-run"},
+            },
+        ],
+        "component_rationales": [
+            {
+                "node_id": "N-02",
+                "requirement_id": "FR-01",
+                "narrative": (
+                    "Cloud Run hosts the Next.js capture endpoint that backs "
+                    "the lead-capture form. Auto-scales from zero so capture "
+                    "stays responsive at low load and absorbs spikes without "
+                    "operator intervention."
+                ),
+                "cite": {"kind": "kb", "ref": "gcp.cloud-run"},
+            },
+            {
+                "node_id": "N-03",
+                "requirement_id": "NFR-01",
+                "narrative": (
+                    "Cloud SQL Postgres with pgvector keeps lead lookups under "
+                    "the p95<200ms NFR target at MVP scale per RQ-01's HNSW "
+                    "benchmark; managed failover keeps the read path warm."
+                ),
+                "cite": {"kind": "finding", "ref": "RQ-01"},
+            },
+            {
+                "node_id": "N-04",
+                "requirement_id": "FR-01",
+                "narrative": (
+                    "Stripe Checkout fronts the paid plan that gates lead "
+                    "capture beyond the free tier. Webhook reconciliation "
+                    "ensures the capture endpoint sees the up-to-date plan."
+                ),
+                "cite": {"kind": "kb", "ref": "gcp.cloud-run"},
+            },
+        ],
+        "failure_modes": [
+            {
+                "id": "FM-01",
+                "node_id": "N-02",
+                "mode": "Cold-start latency spike under bursty traffic",
+                "detection": (
+                    "Cloud Monitoring alert on revision p95 latency > 2s for "
+                    "5 minutes; trace shows cold-start span."
+                ),
+                "recovery": (
+                    "Set min-instances=1 in prod; pre-warm via cron ping; "
+                    "long-term move hot path to min-instances=2."
+                ),
+                "rto": "< 5 min",
+                "rpo": "0 (stateless)",
+                "cite": {"kind": "kb", "ref": "gcp.cloud-run"},
+            },
+            {
+                "id": "FM-02",
+                "node_id": "N-03",
+                "mode": "Regional outage of Cloud SQL primary",
+                "detection": (
+                    "Cloud SQL HA event + connection error spike in worker "
+                    "logs; latency_p95 alert fires."
+                ),
+                "recovery": (
+                    "Confirm HA promotion; replay queued writes from DLQ; "
+                    "communicate via status page."
+                ),
+                "rto": "< 90s",
+                "rpo": "0 (sync repl)",
+                "cite": {"kind": "finding", "ref": "RQ-01"},
+            },
+        ],
+        "build_sequence": [
+            {
+                "id": "BP-01",
+                "label": "Week 1",
+                "title": "Stand up the capture path",
+                "nodes": ["N-01", "N-02"],
+                "rationale": (
+                    "Browser + Cloud Run gives the smallest demoable surface "
+                    "for the capture form; persistence comes next."
+                ),
+            },
+            {
+                "id": "BP-02",
+                "label": "Week 2",
+                "title": "Persist + show history",
+                "nodes": ["N-03"],
+                "rationale": (
+                    "Add Cloud SQL so captures survive restarts and the "
+                    "user can see their lead history."
+                ),
+            },
+            {
+                "id": "BP-03",
+                "label": "Week 3",
+                "title": "Monetize via Stripe",
+                "nodes": ["N-04"],
+                "rationale": (
+                    "Wire Stripe checkout + webhook last so billing rides "
+                    "on a stable capture+persist stack."
+                ),
+            },
+        ],
         "notes": None,
     }
 
@@ -591,6 +770,7 @@ def test_admissibility_passes_when_clean() -> None:
         arch,
         kb_ids={"gcp.cloud-run", "gcp.cloud-sql-postgres"},
         finding_ids={"RQ-01"},
+        requirement_ids={"FR-01", "NFR-01"},
     )
     assert errors == []
 
@@ -606,6 +786,7 @@ def test_admissibility_flags_self_loop_and_dangling_failure_domain() -> None:
         arch,
         kb_ids={"gcp.cloud-run", "gcp.cloud-sql-postgres"},
         finding_ids={"RQ-01"},
+        requirement_ids={"FR-01", "NFR-01"},
     )
     assert any("itself" in e for e in errors)
     assert any("N-99" in e for e in errors)
@@ -699,3 +880,139 @@ def test_arch_edge_alias_from_serializes_to_from() -> None:
     dumped = json.loads(arch.model_dump_json(by_alias=True))
     assert dumped["edges"][0]["from"] == "N-01"
     assert "src" not in dumped["edges"][0]
+
+
+# ─── ADR-0006 admissibility ──────────────────────────────────
+
+
+def _adm_kwargs() -> dict[str, set[str]]:
+    return {
+        "kb_ids": {"gcp.cloud-run", "gcp.cloud-sql-postgres"},
+        "finding_ids": {"RQ-01"},
+        "requirement_ids": {"FR-01", "NFR-01"},
+    }
+
+
+def test_admissibility_flags_missing_sequence_kind() -> None:
+    bad = _good_payload()
+    seqs = bad["sequence_diagrams"]
+    assert isinstance(seqs, list)
+    bad["sequence_diagrams"] = [s for s in seqs if s["kind"] != "async"]
+    arch = Architecture.model_validate(bad)
+    errors = _admissibility_errors(arch, **_adm_kwargs())
+    assert any("missing required kinds" in e and "async" in e for e in errors)
+
+
+def test_admissibility_flags_empty_sequence_diagrams() -> None:
+    bad = _good_payload()
+    bad["sequence_diagrams"] = []
+    arch = Architecture.model_validate(bad)
+    errors = _admissibility_errors(arch, **_adm_kwargs())
+    assert any("sequence_diagrams is empty" in e for e in errors)
+
+
+def test_admissibility_flags_integration_contract_unknown_edge() -> None:
+    bad = _good_payload()
+    contracts = bad["integration_contracts"]
+    assert isinstance(contracts, list)
+    contracts[0] = {**contracts[0], "from": "N-02", "to": "N-04"}  # no such edge
+    arch = Architecture.model_validate(bad)
+    errors = _admissibility_errors(arch, **_adm_kwargs())
+    assert any("does not match any edge" in e for e in errors)
+
+
+def test_admissibility_flags_integration_contract_unknown_node() -> None:
+    bad = _good_payload()
+    contracts = bad["integration_contracts"]
+    assert isinstance(contracts, list)
+    contracts[0] = {**contracts[0], "to": "N-99"}
+    arch = Architecture.model_validate(bad)
+    errors = _admissibility_errors(arch, **_adm_kwargs())
+    assert any("integration_contract[0] to='N-99'" in e for e in errors)
+
+
+def test_admissibility_flags_integration_contract_ungrounded_cite() -> None:
+    bad = _good_payload()
+    contracts = bad["integration_contracts"]
+    assert isinstance(contracts, list)
+    contracts[0] = {**contracts[0], "cite": {"kind": "kb", "ref": "made.up"}}
+    arch = Architecture.model_validate(bad)
+    errors = _admissibility_errors(arch, **_adm_kwargs())
+    assert any("integration_contract[0]" in e and "made.up" in e for e in errors)
+
+
+def test_admissibility_flags_component_rationale_unknown_node() -> None:
+    bad = _good_payload()
+    rats = bad["component_rationales"]
+    assert isinstance(rats, list)
+    rats[0] = {**rats[0], "node_id": "N-99"}
+    arch = Architecture.model_validate(bad)
+    errors = _admissibility_errors(arch, **_adm_kwargs())
+    assert any("component_rationale[0] node_id='N-99'" in e for e in errors)
+
+
+def test_admissibility_flags_component_rationale_unknown_requirement() -> None:
+    bad = _good_payload()
+    rats = bad["component_rationales"]
+    assert isinstance(rats, list)
+    rats[0] = {**rats[0], "requirement_id": "FR-99"}
+    arch = Architecture.model_validate(bad)
+    errors = _admissibility_errors(arch, **_adm_kwargs())
+    assert any("requirement_id='FR-99'" in e for e in errors)
+
+
+def test_admissibility_flags_empty_component_rationales() -> None:
+    bad = _good_payload()
+    bad["component_rationales"] = []
+    arch = Architecture.model_validate(bad)
+    errors = _admissibility_errors(arch, **_adm_kwargs())
+    assert any("component_rationales is empty" in e for e in errors)
+
+
+def test_admissibility_flags_empty_integration_contracts() -> None:
+    bad = _good_payload()
+    bad["integration_contracts"] = []
+    arch = Architecture.model_validate(bad)
+    errors = _admissibility_errors(arch, **_adm_kwargs())
+    assert any("integration_contracts is empty" in e for e in errors)
+
+
+def test_admissibility_flags_missing_failure_mode_for_node() -> None:
+    bad = _good_payload()
+    fms = bad["failure_modes"]
+    assert isinstance(fms, list)
+    # drop FM-02 (covers N-03 which has failure_domain=[N-02])
+    bad["failure_modes"] = [f for f in fms if f["node_id"] != "N-03"]
+    arch = Architecture.model_validate(bad)
+    errors = _admissibility_errors(arch, **_adm_kwargs())
+    assert any("failure_modes missing entries" in e and "N-03" in e for e in errors)
+
+
+def test_admissibility_flags_failure_mode_unknown_node() -> None:
+    bad = _good_payload()
+    fms = bad["failure_modes"]
+    assert isinstance(fms, list)
+    fms[0] = {**fms[0], "node_id": "N-99"}
+    arch = Architecture.model_validate(bad)
+    errors = _admissibility_errors(arch, **_adm_kwargs())
+    assert any("failure_modes[0] node_id='N-99'" in e for e in errors)
+
+
+def test_admissibility_flags_too_few_build_phases() -> None:
+    bad = _good_payload()
+    phases = bad["build_sequence"]
+    assert isinstance(phases, list)
+    bad["build_sequence"] = phases[:2]  # only 2
+    arch = Architecture.model_validate(bad)
+    errors = _admissibility_errors(arch, **_adm_kwargs())
+    assert any("ADR-0006 requires \u22653" in e for e in errors)
+
+
+def test_admissibility_flags_build_phase_unknown_node() -> None:
+    bad = _good_payload()
+    phases = bad["build_sequence"]
+    assert isinstance(phases, list)
+    phases[0] = {**phases[0], "nodes": ["N-01", "N-99"]}
+    arch = Architecture.model_validate(bad)
+    errors = _admissibility_errors(arch, **_adm_kwargs())
+    assert any("build_sequence[0] node='N-99'" in e for e in errors)

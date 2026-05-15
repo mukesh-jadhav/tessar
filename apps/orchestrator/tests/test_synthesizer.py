@@ -390,7 +390,7 @@ def test_admissibility_errors_flags_unknown_refs() -> None:
     payload = _good_payload()
     s = Synthesis.model_validate(payload)
     errors = _admissibility_errors(s, kb_ids=set(), finding_ids=set())
-    # 2 kb refs + 1 finding ref = 3 unknowns
+    # 2 kb refs in decisions + 1 finding ref in decisions = 3 unknowns
     assert len(errors) == 3
 
 

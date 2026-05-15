@@ -6,7 +6,12 @@ fixtures. Catch obvious regressions in the scoring math.
 
 from __future__ import annotations
 
-from rubric.checks import cost_realism, groundedness, schema_validity
+from rubric.checks import (
+    adr0006_completeness,
+    cost_realism,
+    groundedness,
+    schema_validity,
+)
 from rubric.scoring import (
     PER_SCENARIO_PASS_THRESHOLD,
     score_scenario,
@@ -176,3 +181,107 @@ def test_suite_passes_with_three_passing_scenarios() -> None:
     suite = score_suite(results)
     assert suite.suite_passed
     assert suite.pass_rate == 1.0
+
+
+# --- ADR-0006 narrative completeness -----------------
+
+
+def _adr0006_pkg() -> dict:
+    pkg = _well_formed_pkg()
+    pkg["nodes"][0]["failureDomain"] = []
+    pkg["nodes"][1]["failureDomain"] = ["web"]
+    pkg["edges"] = [{"from": "web", "to": "db", "kind": "data"}]
+    pkg["sequenceDiagrams"] = [
+        {
+            "id": "SEQ-w",
+            "kind": "write",
+            "title": "t",
+            "summary": "s",
+            "participants": [],
+            "mermaid": "sequenceDiagram",
+        },
+        {
+            "id": "SEQ-r",
+            "kind": "read",
+            "title": "t",
+            "summary": "s",
+            "participants": [],
+            "mermaid": "sequenceDiagram",
+        },
+        {
+            "id": "SEQ-a",
+            "kind": "async",
+            "title": "t",
+            "summary": "s",
+            "participants": [],
+            "mermaid": "sequenceDiagram",
+        },
+    ]
+    pkg["integrationContracts"] = [
+        {
+            "edgeId": "e1",
+            "from": "web",
+            "to": "db",
+            "mode": "sync",
+            "payload": "p",
+            "idempotency": "i",
+            "retry": "r",
+            "semantics": "exactly-once",
+            "cite": 1,
+        }
+    ]
+    pkg["componentRationales"] = [
+        {"nodeId": "web", "requirementId": "r1", "narrative": "fits", "cite": 1}
+    ]
+    pkg["failureModes"] = [
+        {
+            "id": "FM-01",
+            "nodeId": "db",
+            "mode": "m",
+            "detection": "d",
+            "recovery": "r",
+            "rto": "5m",
+            "rpo": "0s",
+            "cite": 2,
+        }
+    ]
+    pkg["buildSequence"] = [
+        {
+            "id": "BP-01",
+            "label": "L1",
+            "title": "T1",
+            "nodes": ["web"],
+            "rationale": "r",
+        },
+        {
+            "id": "BP-02",
+            "label": "L2",
+            "title": "T2",
+            "nodes": ["db"],
+            "rationale": "r",
+        },
+        {"id": "BP-03", "label": "L3", "title": "T3", "nodes": [], "rationale": "r"},
+    ]
+    return pkg
+
+
+def test_adr0006_completeness_full() -> None:
+    s = adr0006_completeness(_adr0006_pkg())
+    assert s.score == 10.0
+
+
+def test_adr0006_completeness_missing_async_kind() -> None:
+    pkg = _adr0006_pkg()
+    pkg["sequenceDiagrams"] = [
+        d for d in pkg["sequenceDiagrams"] if d["kind"] != "async"
+    ]
+    s = adr0006_completeness(pkg)
+    assert s.score == 8.0
+
+
+def test_adr0006_completeness_flags_missing_failure_mode() -> None:
+    pkg = _adr0006_pkg()
+    pkg["failureModes"] = []
+    s = adr0006_completeness(pkg)
+    assert s.score == 8.0
+    assert any("failureModes missing entries" in f for f in s.findings)

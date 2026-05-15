@@ -34,7 +34,15 @@ from collections.abc import Iterable
 from datetime import UTC, datetime
 
 from tessar.kb.types import KbRecord
-from tessar.schemas.architecture import Architecture, ArchNode
+from tessar.schemas.architecture import (
+    Architecture,
+    ArchNode,
+    BuildPhase,
+    ComponentRationale,
+    FailureMode,
+    IntegrationContract,
+    SequenceDiagram,
+)
 from tessar.schemas.brief import NormalizedBrief
 from tessar.schemas.cost import BomLine, CostEstimate
 from tessar.schemas.requirements import Requirements
@@ -46,15 +54,24 @@ from tessar.schemas.run_package import (
     PackageArchNode,
     PackageBomLine,
     PackageBomScaleExp,
+    PackageBuildPhase,
+    PackageComponentRationale,
     PackageDecision,
+    PackageFailureMode,
     PackageFlowStep,
+    PackageIntegrationContract,
     PackageRequirement,
     PackageRisk,
+    PackageSequenceDiagram,
     RoadmapItem,
     RunPackage,
     Source,
 )
-from tessar.schemas.synthesis import Decision, DecisionCitation, Synthesis
+from tessar.schemas.synthesis import (
+    Decision,
+    DecisionCitation,
+    Synthesis,
+)
 
 # ─── public entry point ───────────────────────────────────────────────
 
@@ -103,6 +120,16 @@ def package(
     pkg_risks = [_pack_risk(r, cite_map) for r in risks.risks]
     pkg_flows = [_pack_flow(f) for f in architecture.flows]
 
+    pkg_sequence_diagrams = [_pack_sequence(s) for s in architecture.sequence_diagrams]
+    pkg_integration_contracts = [
+        _pack_contract(c, cite_map) for c in architecture.integration_contracts
+    ]
+    pkg_component_rationales = [
+        _pack_rationale(c, cite_map) for c in architecture.component_rationales
+    ]
+    pkg_failure_modes = [_pack_failure_mode(f, cite_map) for f in architecture.failure_modes]
+    pkg_build_sequence = [_pack_build_phase(p) for p in architecture.build_sequence]
+
     pkg_requirements = _pack_requirements(requirements)
     pkg_assumptions = _pack_assumptions(normalized, requirements)
     pkg_roadmap = _pack_roadmap(risks, cost)
@@ -123,6 +150,11 @@ def package(
         roadmap=pkg_roadmap,
         flow_narrative=pkg_flows,
         sources=sources,
+        sequence_diagrams=pkg_sequence_diagrams,
+        integration_contracts=pkg_integration_contracts,
+        component_rationales=pkg_component_rationales,
+        failure_modes=pkg_failure_modes,
+        build_sequence=pkg_build_sequence,
     )
 
 
@@ -193,6 +225,13 @@ def _build_sources(
     for r in risks.risks:
         for c in r.citations:
             _register(c)
+
+    for c in architecture.integration_contracts:
+        _register(c.cite)
+    for cr in architecture.component_rationales:
+        _register(cr.cite)
+    for fm in architecture.failure_modes:
+        _register(fm.cite)
 
     return sources, cite_map
 
@@ -401,6 +440,70 @@ def _pack_risk(r: Risk, cite_map: dict[tuple[str, str], int]) -> PackageRisk:
 
 def _pack_flow(f) -> PackageFlowStep:
     return PackageFlowStep(id=f.id, title=f.title, nodes=list(f.nodes), body=f.body)
+
+
+# ─── ADR-0006 system-design narrative ─────────────────────────────────
+
+
+def _pack_sequence(s: SequenceDiagram) -> PackageSequenceDiagram:
+    return PackageSequenceDiagram(
+        id=s.id,
+        kind=s.kind,
+        title=s.title,
+        summary=s.summary,
+        participants=list(s.participants),
+        mermaid=s.mermaid,
+    )
+
+
+def _pack_contract(
+    c: IntegrationContract, cite_map: dict[tuple[str, str], int]
+) -> PackageIntegrationContract:
+    return PackageIntegrationContract(
+        edge_id=c.edge_id,
+        src=c.src,
+        to=c.to,
+        mode=c.mode,
+        payload=c.payload,
+        idempotency=c.idempotency,
+        retry=c.retry,
+        semantics=c.semantics,
+        cite=cite_map[(c.cite.kind, c.cite.ref)],
+    )
+
+
+def _pack_rationale(
+    r: ComponentRationale, cite_map: dict[tuple[str, str], int]
+) -> PackageComponentRationale:
+    return PackageComponentRationale(
+        node_id=r.node_id,
+        requirement_id=r.requirement_id,
+        narrative=r.narrative,
+        cite=cite_map[(r.cite.kind, r.cite.ref)],
+    )
+
+
+def _pack_failure_mode(f: FailureMode, cite_map: dict[tuple[str, str], int]) -> PackageFailureMode:
+    return PackageFailureMode(
+        id=f.id,
+        node_id=f.node_id,
+        mode=f.mode,
+        detection=f.detection,
+        recovery=f.recovery,
+        rto=f.rto,
+        rpo=f.rpo,
+        cite=cite_map[(f.cite.kind, f.cite.ref)],
+    )
+
+
+def _pack_build_phase(p: BuildPhase) -> PackageBuildPhase:
+    return PackageBuildPhase(
+        id=p.id,
+        label=p.label,
+        title=p.title,
+        nodes=list(p.nodes),
+        rationale=p.rationale,
+    )
 
 
 # ─── derived sections (assumptions, requirements, roadmap, snapshot) ──
@@ -650,6 +753,45 @@ def render_markdown(pkg: RunPackage) -> str:
         lines.append(f.body)
         lines.append("")
 
+    if pkg.sequence_diagrams:
+        lines.append("### Sequence diagrams")
+        lines.append("")
+        for s in pkg.sequence_diagrams:
+            lines.append(f"#### {s.id} · {s.title} _({s.kind})_")
+            lines.append("")
+            lines.append(s.summary)
+            lines.append("")
+            lines.append("```mermaid")
+            lines.append(s.mermaid)
+            lines.append("```")
+            lines.append("")
+
+    if pkg.integration_contracts:
+        lines.append("### Integration contracts")
+        lines.append("")
+        lines.append("| Edge | From → To | Mode | Semantics | Source |")
+        lines.append("| --- | --- | --- | --- | --- |")
+        for c in pkg.integration_contracts:
+            lines.append(
+                f"| `{c.edge_id}` | `{c.src} → {c.to}` | {c.mode} | {c.semantics} | [{c.cite}] |"
+            )
+        lines.append("")
+        for c in pkg.integration_contracts:
+            lines.append(f"- **`{c.edge_id}` payload.** {c.payload}")
+            lines.append(f"  - **Idempotency.** {c.idempotency}")
+            lines.append(f"  - **Retry.** {c.retry}")
+        lines.append("")
+
+    if pkg.component_rationales:
+        lines.append("### Why each component fits")
+        lines.append("")
+        for r in pkg.component_rationales:
+            lines.append(
+                f"- **{r.node_id}** _(satisfies {r.requirement_id})_ — "
+                f"{r.narrative} _Source: [{r.cite}]_"
+            )
+        lines.append("")
+
     lines.append("## Bill of materials (USD/month)")
     lines.append("")
     lines.append("| ID | Component | Kind | Baseline | Source |")
@@ -669,6 +811,34 @@ def render_markdown(pkg: RunPackage) -> str:
         lines.append("")
         lines.append(f"**Mitigation.** {r.mitigation} _Source: [{r.cite}]_")
         lines.append("")
+
+    if pkg.failure_modes:
+        lines.append("## Failure modes")
+        lines.append("")
+        lines.append("| ID | Node | Mode | RTO | RPO | Source |")
+        lines.append("| --- | --- | --- | --- | --- | --- |")
+        for f in pkg.failure_modes:
+            lines.append(f"| {f.id} | {f.node_id} | {f.mode} | {f.rto} | {f.rpo} | [{f.cite}] |")
+        lines.append("")
+        for f in pkg.failure_modes:
+            lines.append(f"### {f.id} · {f.node_id} — {f.mode}")
+            lines.append("")
+            lines.append(f"- **Detection.** {f.detection}")
+            lines.append(f"- **Recovery.** {f.recovery}")
+            lines.append(f"- **RTO.** {f.rto}")
+            lines.append(f"- **RPO.** {f.rpo}")
+            lines.append("")
+
+    if pkg.build_sequence:
+        lines.append("## Build sequence")
+        lines.append("")
+        for i, p in enumerate(pkg.build_sequence, start=1):
+            lines.append(f"### {p.id} · {p.label} — {p.title} (phase {i})")
+            lines.append("")
+            lines.append(p.rationale)
+            lines.append("")
+            lines.append(f"- **Nodes.** {', '.join(p.nodes)}")
+            lines.append("")
 
     lines.append("## Roadmap")
     lines.append("")

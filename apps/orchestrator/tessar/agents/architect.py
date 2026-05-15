@@ -38,9 +38,10 @@ from tessar.schemas import (
 )
 
 AGENT_NAME = "architect"
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v2"
 
 _FENCE = re.compile(r"^\s*```(?:json)?\s*|\s*```\s*$", re.MULTILINE)
+_REQUIRED_SEQUENCE_KINDS = frozenset({"write", "read", "async"})
 
 
 class ArchitectureError(RuntimeError):
@@ -130,19 +131,23 @@ def _admissibility_errors(
     *,
     kb_ids: set[str],
     finding_ids: set[str],
+    requirement_ids: set[str],
 ) -> list[str]:
     """Return human-readable errors for ungrounded citations or broken
     topology. Empty list = clean output."""
     errors: list[str] = []
     node_ids = {n.id for n in arch.nodes}
+    edge_pairs = {(e.src, e.to) for e in arch.edges}
 
-    # 1. citation grounding
+    def _check_cite(label: str, kind: str, ref: str) -> None:
+        if kind == "kb" and ref not in kb_ids:
+            errors.append(f"{label} cites kb:{ref!r} but that KB id was not supplied")
+        elif kind == "finding" and ref not in finding_ids:
+            errors.append(f"{label} cites finding:{ref!r} but no such finding was returned")
+
+    # 1. citation grounding (nodes)
     for n in arch.nodes:
-        cite = n.cite
-        if cite.kind == "kb" and cite.ref not in kb_ids:
-            errors.append(f"{n.id} cites kb:{cite.ref!r} but that KB id was not supplied")
-        elif cite.kind == "finding" and cite.ref not in finding_ids:
-            errors.append(f"{n.id} cites finding:{cite.ref!r} but no such finding was returned")
+        _check_cite(n.id, n.cite.kind, n.cite.ref)
 
     # 2. topology — edges
     for i, e in enumerate(arch.edges):
@@ -166,6 +171,88 @@ def _admissibility_errors(
                 errors.append(f"{n.id}.failure_domain references {ref!r} which is not a node")
             elif ref == n.id:
                 errors.append(f"{n.id}.failure_domain includes itself")
+
+    # 5. ADR-0006: sequence_diagrams must cover write/read/async
+    if not arch.sequence_diagrams:
+        errors.append("sequence_diagrams is empty (ADR-0006 requires write/read/async)")
+    else:
+        kinds_present = {sd.kind for sd in arch.sequence_diagrams}
+        missing = _REQUIRED_SEQUENCE_KINDS - kinds_present
+        if missing:
+            errors.append(f"sequence_diagrams missing required kinds: {sorted(missing)}")
+        seen_ids: set[str] = set()
+        for sd in arch.sequence_diagrams:
+            if sd.id in seen_ids:
+                errors.append(f"sequence_diagrams has duplicate id {sd.id!r}")
+            seen_ids.add(sd.id)
+            expected_id = f"SEQ-{sd.kind}"
+            if sd.id != expected_id:
+                errors.append(
+                    f"sequence_diagram id {sd.id!r} does not match kind (expected {expected_id!r})"
+                )
+
+    # 6. ADR-0006: integration_contracts must reference defined edges + cite
+    if not arch.integration_contracts:
+        errors.append("integration_contracts is empty (ADR-0006 requires ≥1)")
+    else:
+        for i, ic in enumerate(arch.integration_contracts):
+            if ic.src not in node_ids:
+                errors.append(f"integration_contract[{i}] from={ic.src!r} is not a defined node")
+            if ic.to not in node_ids:
+                errors.append(f"integration_contract[{i}] to={ic.to!r} is not a defined node")
+            if (ic.src, ic.to) not in edge_pairs:
+                errors.append(
+                    f"integration_contract[{i}] {ic.src}->{ic.to} does not match any edge"
+                )
+            _check_cite(f"integration_contract[{i}]", ic.cite.kind, ic.cite.ref)
+
+    # 7. ADR-0006: component_rationales must reference defined nodes + requirements + cite
+    if not arch.component_rationales:
+        errors.append("component_rationales is empty (ADR-0006 requires ≥1)")
+    else:
+        for i, cr in enumerate(arch.component_rationales):
+            if cr.node_id not in node_ids:
+                errors.append(
+                    f"component_rationale[{i}] node_id={cr.node_id!r} is not a defined node"
+                )
+            if cr.requirement_id not in requirement_ids:
+                errors.append(
+                    f"component_rationale[{i}] requirement_id={cr.requirement_id!r} "
+                    f"is not a supplied requirement id"
+                )
+            _check_cite(f"component_rationale[{i}]", cr.cite.kind, cr.cite.ref)
+
+    # 8. ADR-0006: failure_modes — one per node with failure_domain.length>=1
+    nodes_needing_fm = {n.id for n in arch.nodes if n.failure_domain}
+    fm_node_ids: set[str] = set()
+    seen_fm_ids: set[str] = set()
+    for i, fm in enumerate(arch.failure_modes):
+        if fm.id in seen_fm_ids:
+            errors.append(f"failure_modes[{i}] duplicate id {fm.id!r}")
+        seen_fm_ids.add(fm.id)
+        if fm.node_id not in node_ids:
+            errors.append(f"failure_modes[{i}] node_id={fm.node_id!r} is not a defined node")
+        fm_node_ids.add(fm.node_id)
+        _check_cite(f"failure_modes[{i}]", fm.cite.kind, fm.cite.ref)
+    missing_fm = nodes_needing_fm - fm_node_ids
+    if missing_fm:
+        errors.append(
+            f"failure_modes missing entries for nodes with failure_domain: {sorted(missing_fm)}"
+        )
+
+    # 9. ADR-0006: build_sequence — 3-6 phases, components reference node ids
+    if len(arch.build_sequence) < 3:
+        errors.append(
+            f"build_sequence has {len(arch.build_sequence)} phases (ADR-0006 requires ≥3)"
+        )
+    seen_bp_ids: set[str] = set()
+    for i, phase in enumerate(arch.build_sequence):
+        if phase.id in seen_bp_ids:
+            errors.append(f"build_sequence[{i}] duplicate id {phase.id!r}")
+        seen_bp_ids.add(phase.id)
+        for node_ref in phase.nodes:
+            if node_ref not in node_ids:
+                errors.append(f"build_sequence[{i}] node={node_ref!r} is not a defined node id")
 
     return errors
 
@@ -208,6 +295,9 @@ def architect(
 
     kb_ids = {r.id for r in kb_candidates}
     finding_ids = {f.question_id for f in findings.findings}
+    requirement_ids = {r.id for r in requirements.functional} | {
+        r.id for r in requirements.non_functional
+    }
 
     # Architect output is the largest JSON in the graph (nodes + edges + flows
     # + per-node `why`/`alts`/`scale`). 16k was empirically too tight on rich
@@ -226,7 +316,12 @@ def architect(
         )
         response_text = response.text
         arch = _parse(response.text)
-        admissibility = _admissibility_errors(arch, kb_ids=kb_ids, finding_ids=finding_ids)
+        admissibility = _admissibility_errors(
+            arch,
+            kb_ids=kb_ids,
+            finding_ids=finding_ids,
+            requirement_ids=requirement_ids,
+        )
         if not admissibility:
             return arch
         first_err = "Architecture rejected:\n- " + "\n- ".join(admissibility)
@@ -285,7 +380,12 @@ def architect(
             validation_error=str(second_err),
         ) from second_err
 
-    admissibility = _admissibility_errors(arch, kb_ids=kb_ids, finding_ids=finding_ids)
+    admissibility = _admissibility_errors(
+        arch,
+        kb_ids=kb_ids,
+        finding_ids=finding_ids,
+        requirement_ids=requirement_ids,
+    )
     if admissibility:
         raise ArchitectureError(
             "architect produced ungrounded or topologically broken output twice",

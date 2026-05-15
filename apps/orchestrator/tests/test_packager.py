@@ -346,6 +346,121 @@ def _architecture() -> Architecture:
                 "data_flow": "flowchart LR\n  N1 --> N2 --> N3",
                 "sequence": "sequenceDiagram\n  actor U\n  participant W\n  U->>W: POST /runs",
             },
+            "sequence_diagrams": [
+                {
+                    "id": "SEQ-write",
+                    "kind": "write",
+                    "title": "Submit a brief",
+                    "summary": "User posts a brief; web writes a Run row.",
+                    "participants": ["User", "Browser", "Cloud Run web", "Cloud SQL"],
+                    "mermaid": (
+                        "sequenceDiagram\n  actor U\n  participant W\n  participant DB\n"
+                        "  U->>W: POST /runs\n  W->>DB: INSERT run\n  W-->>U: 202 + runId"
+                    ),
+                },
+                {
+                    "id": "SEQ-read",
+                    "kind": "read",
+                    "title": "Stream live progress",
+                    "summary": "Browser opens SSE to web; web tails events from DB.",
+                    "participants": ["Browser", "Cloud Run web", "Cloud SQL"],
+                    "mermaid": (
+                        "sequenceDiagram\n  participant B\n  participant W\n  participant DB\n"
+                        "  B->>W: GET /runs/:id/stream\n  W->>DB: SELECT events\n  W-->>B: data:event"
+                    ),
+                },
+                {
+                    "id": "SEQ-async",
+                    "kind": "async",
+                    "title": "Stripe webhook reconciles a run",
+                    "summary": "Stripe posts session.completed; web verifies + updates row.",
+                    "participants": ["Stripe", "Cloud Run web", "Cloud SQL"],
+                    "mermaid": (
+                        "sequenceDiagram\n  participant S\n  participant W\n  participant DB\n"
+                        "  S->>W: POST /webhooks/stripe\n  W->>DB: UPDATE run SET paid=true"
+                    ),
+                },
+            ],
+            "integration_contracts": [
+                {
+                    "edge_id": "N-02->>-N-03",
+                    "from": "N-02",
+                    "to": "N-03",
+                    "mode": "sync",
+                    "payload": "Postgres SQL via Cloud SQL connector; rows ≤ 64KB.",
+                    "idempotency": "Receiver upserts by (runId); transactional.",
+                    "retry": "5s timeout; 1s expo backoff; 3 attempts.",
+                    "semantics": "exactly-once",
+                    "cite": {"kind": "kb", "ref": "gcp.cloud-sql-postgres"},
+                },
+                {
+                    "edge_id": "N-04->>-N-02",
+                    "from": "N-04",
+                    "to": "N-02",
+                    "mode": "async",
+                    "payload": "Stripe webhook JSON ≤ 8KB with signature header.",
+                    "idempotency": "Stripe event-id stored; duplicate posts no-op.",
+                    "retry": "5s timeout; expo backoff 1s→30s; 5 attempts.",
+                    "semantics": "at-least-once",
+                    "cite": {"kind": "kb", "ref": "gcp.cloud-run"},
+                },
+            ],
+            "component_rationales": [
+                {
+                    "node_id": "N-02",
+                    "requirement_id": "FR-01",
+                    "narrative": (
+                        "Cloud Run hosts the Next.js capture endpoint; auto-scales "
+                        "from zero so capture stays responsive at low load."
+                    ),
+                    "cite": {"kind": "kb", "ref": "gcp.cloud-run"},
+                }
+            ],
+            "failure_modes": [
+                {
+                    "id": "FM-01",
+                    "node_id": "N-02",
+                    "mode": "Cold-start latency spike",
+                    "detection": "Cloud Monitoring alert on revision p95 > 2s.",
+                    "recovery": "Set min-instances=1; pre-warm via cron ping.",
+                    "rto": "< 5 min",
+                    "rpo": "0s",
+                    "cite": {"kind": "kb", "ref": "gcp.cloud-run"},
+                },
+                {
+                    "id": "FM-02",
+                    "node_id": "N-03",
+                    "mode": "Cloud SQL primary regional outage",
+                    "detection": "Cloud SQL HA event + connection error spike.",
+                    "recovery": "Confirm HA promotion; replay queued writes.",
+                    "rto": "< 90s",
+                    "rpo": "0s",
+                    "cite": {"kind": "finding", "ref": "RQ-01"},
+                },
+            ],
+            "build_sequence": [
+                {
+                    "id": "BP-01",
+                    "label": "Week 1",
+                    "title": "Stand up the capture path",
+                    "nodes": ["N-01", "N-02"],
+                    "rationale": "Browser + Cloud Run gives the smallest demoable surface.",
+                },
+                {
+                    "id": "BP-02",
+                    "label": "Week 2",
+                    "title": "Persist + show history",
+                    "nodes": ["N-03"],
+                    "rationale": "Add Cloud SQL so captures survive restarts.",
+                },
+                {
+                    "id": "BP-03",
+                    "label": "Week 3",
+                    "title": "Monetize via Stripe",
+                    "nodes": ["N-04"],
+                    "rationale": "Wire Stripe last so billing rides on a stable stack.",
+                },
+            ],
             "notes": None,
         }
     )
@@ -671,6 +786,65 @@ def test_runpackage_dumps_to_camelcase_json() -> None:
     json.dumps(data)
 
 
+def test_package_passes_through_adr0006_narrative_fields() -> None:
+    pkg = package(**_good_inputs())
+
+    assert len(pkg.sequence_diagrams) == 3
+    kinds = {s.kind for s in pkg.sequence_diagrams}
+    assert kinds == {"write", "read", "async"}
+
+    assert len(pkg.integration_contracts) == 2
+    contract = pkg.integration_contracts[0]
+    assert contract.edge_id == "N-02->>-N-03"
+    assert contract.src == "N-02"
+    assert contract.to == "N-03"
+    assert contract.semantics == "exactly-once"
+    assert isinstance(contract.cite, int) and contract.cite >= 1
+
+    assert len(pkg.component_rationales) == 1
+    rat = pkg.component_rationales[0]
+    assert rat.node_id == "N-02"
+    assert rat.requirement_id == "FR-01"
+    assert isinstance(rat.cite, int) and rat.cite >= 1
+
+    assert len(pkg.failure_modes) == 2
+    fm = pkg.failure_modes[0]
+    assert fm.id == "FM-01"
+    assert fm.node_id == "N-02"
+    assert fm.rto == "< 5 min"
+    assert isinstance(fm.cite, int) and fm.cite >= 1
+
+    assert len(pkg.build_sequence) == 3
+    bp = pkg.build_sequence[0]
+    assert bp.id == "BP-01"
+    assert bp.label == "Week 1"
+    assert "N-01" in bp.nodes and "N-02" in bp.nodes
+
+
+def test_package_dumps_adr0006_fields_with_camelcase_aliases() -> None:
+    pkg = package(**_good_inputs())
+    data = pkg.model_dump(by_alias=True)
+    assert "sequenceDiagrams" in data
+    assert "integrationContracts" in data
+    assert "componentRationales" in data
+    assert "failureModes" in data
+    assert "buildSequence" in data
+    contract = data["integrationContracts"][0]
+    assert contract["edgeId"] == "N-02->>-N-03"
+    assert contract["from"] == "N-02"
+    assert "src" not in contract
+    rat = data["componentRationales"][0]
+    assert rat["nodeId"] == "N-02"
+    assert rat["requirementId"] == "FR-01"
+    fm = data["failureModes"][0]
+    assert fm["nodeId"] == "N-02"
+    assert fm["rto"]
+    assert fm["rpo"]
+    bp = data["buildSequence"][0]
+    assert bp["nodes"] == ["N-01", "N-02"]
+    assert bp["title"]
+
+
 def test_render_markdown_contains_all_sections() -> None:
     pkg = package(**_good_inputs())
     md = render_markdown(pkg)
@@ -684,8 +858,13 @@ def test_render_markdown_contains_all_sections() -> None:
         "### Components",
         "### Edges",
         "### Request flow",
+        "### Sequence diagrams",
+        "### Integration contracts",
+        "### Why each component fits",
         "## Bill of materials",
         "## Risks",
+        "## Failure modes",
+        "## Build sequence",
         "## Roadmap",
         "## Sources",
     ):

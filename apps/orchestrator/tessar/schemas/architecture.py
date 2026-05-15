@@ -97,7 +97,7 @@ class SequenceDiagram(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    id: str = Field(pattern=r"^SEQ-(write|read|async)$", min_length=9, max_length=10)
+    id: str = Field(pattern=r"^SEQ-(write|read|async)$", min_length=8, max_length=10)
     kind: SequenceKind
     title: str = Field(min_length=3, max_length=120)
     summary: str = Field(min_length=20, max_length=600)
@@ -134,6 +134,43 @@ class ComponentRationale(BaseModel):
     cite: DecisionCitation
 
 
+class FailureMode(BaseModel):
+    """One row in the per-node failure-modes table (ADR-0006).
+
+    Architect emits one entry per `ArchNode` whose `failure_domain` has
+    at least one member (i.e. nodes the architect already flagged as
+    architecturally consequential).
+    """
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    id: str = Field(pattern=r"^FM-\d{1,3}$", min_length=4, max_length=8)
+    node_id: str = Field(pattern=r"^N-\d{1,3}$", min_length=3, max_length=8, alias="nodeId")
+    mode: str = Field(min_length=4, max_length=160)
+    detection: str = Field(min_length=10, max_length=600)
+    recovery: str = Field(min_length=10, max_length=800)
+    rto: str = Field(min_length=2, max_length=60)
+    rpo: str = Field(min_length=2, max_length=60)
+    cite: DecisionCitation
+
+
+class BuildPhase(BaseModel):
+    """One phase of the engineering build sequence (ADR-0006).
+
+    Distinct from `RoadmapItem` (product roadmap); this is the
+    week-1/week-2/week-3 ordering of which `ArchNode`s to stand up
+    first.
+    """
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    id: str = Field(pattern=r"^BP-\d{1,2}$", min_length=4, max_length=6)
+    label: str = Field(min_length=2, max_length=60)
+    title: str = Field(min_length=4, max_length=160)
+    nodes: list[str] = Field(min_length=1, max_length=30)
+    rationale: str = Field(min_length=20, max_length=600)
+
+
 class MermaidDiagrams(BaseModel):
     """C4 + data-flow Mermaid sources.
 
@@ -167,4 +204,6 @@ class Architecture(BaseModel):
     sequence_diagrams: list[SequenceDiagram] = Field(default_factory=list, max_length=3)
     integration_contracts: list[IntegrationContract] = Field(default_factory=list, max_length=20)
     component_rationales: list[ComponentRationale] = Field(default_factory=list, max_length=20)
+    failure_modes: list[FailureMode] = Field(default_factory=list, max_length=30)
+    build_sequence: list[BuildPhase] = Field(default_factory=list, max_length=8)
     notes: str | None = Field(default=None, max_length=1500)
