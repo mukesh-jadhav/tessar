@@ -185,7 +185,7 @@ function Nav({
       <div
         role="tablist"
         aria-label="Package sections"
-        className="mx-auto flex w-full max-w-6xl gap-1 overflow-x-auto px-4 md:px-8"
+        className="scrollbar-hide mx-auto flex w-full max-w-6xl gap-1 overflow-x-auto px-4 md:px-8"
       >
         {SECTIONS.map((s) => {
           const isActive = active === s.id;

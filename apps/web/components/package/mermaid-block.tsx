@@ -15,7 +15,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { mermaidTheme } from "@/lib/diagrams/mermaid-theme";
+import { resolveMermaidTheme } from "@/lib/diagrams/mermaid-theme";
 
 interface Props {
   /** Stable id for the diagram (used as the SVG's DOM id). */
@@ -34,7 +34,20 @@ interface RenderState {
 
 export function MermaidBlock({ id, source, className }: Props): React.ReactElement {
   const [state, setState] = useState<RenderState>({ status: "idle" });
+  const [themeTick, setThemeTick] = useState(0);
   const cancelled = useRef(false);
+
+  // Re-render when the user toggles light/dark so token-derived colors
+  // refresh. The ThemeProvider toggles a class/attribute on <html>.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const observer = new MutationObserver(() => setThemeTick((n) => n + 1));
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class", "data-theme", "style"],
+    });
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     cancelled.current = false;
@@ -46,12 +59,13 @@ export function MermaidBlock({ id, source, className }: Props): React.ReactEleme
         const mod = await import("mermaid");
         if (cancelled.current || !mounted) return;
         const mermaid = mod.default;
+        const resolved = resolveMermaidTheme();
         mermaid.initialize({
           startOnLoad: false,
           securityLevel: "strict",
-          fontFamily: mermaidTheme.themeVariables.fontFamily,
-          theme: mermaidTheme.theme,
-          themeVariables: mermaidTheme.themeVariables,
+          fontFamily: resolved.themeVariables.fontFamily,
+          theme: resolved.theme,
+          themeVariables: resolved.themeVariables,
         });
         // mermaid.render returns { svg, bindFunctions? }
         const safeId = `mmd-${id.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
@@ -69,7 +83,7 @@ export function MermaidBlock({ id, source, className }: Props): React.ReactEleme
       cancelled.current = true;
       mounted = false;
     };
-  }, [id, source]);
+  }, [id, source, themeTick]);
 
   return (
     <div className={className ?? ""}>

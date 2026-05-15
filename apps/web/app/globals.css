@@ -41,3 +41,15 @@
     }
   }
 }
+
+@layer utilities {
+  /* Hide native scrollbars on horizontally-scrolling rows (tab strips,
+     chip rows, etc.) where the OS scrollbar reads as a stray slider. */
+  .scrollbar-hide {
+    -ms-overflow-style: none; /* IE / legacy Edge */
+    scrollbar-width: none; /* Firefox */
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none; /* Chromium / Safari */
+  }
+}
