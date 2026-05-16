@@ -59,11 +59,25 @@ export default function SignInPage(): React.ReactElement {
         redirectTo: "/dashboard",
       });
       if (res?.error) {
-        setError("Could not send the magic link. Try again in a moment.");
+        // Auth.js v5 returns an opaque `error` code (`EmailSignin`,
+        // `Verification`, etc). Surface it in dev so the operator can
+        // tell "SMTP refused" from "allowlist rejected"; keep the user-
+        // facing copy gentle.
+        if (process.env.NODE_ENV !== "production") {
+          console.error("[signin] nodemailer signIn failed:", res);
+        }
+        setError(
+          res.code === "EmailSignin"
+            ? "Couldn't reach the mail server. If you're running locally, make sure Mailpit is up (`docker compose -f infra/docker-compose.yml up mailpit`)."
+            : "Could not send the magic link. Try again in a moment.",
+        );
       } else {
         setSent(true);
       }
-    } catch {
+    } catch (err) {
+      if (process.env.NODE_ENV !== "production") {
+        console.error("[signin] nodemailer signIn threw:", err);
+      }
       setError("Could not send the magic link. Try again in a moment.");
     } finally {
       setSubmitting(false);
