@@ -39,6 +39,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       clientSecret: process.env.AUTH_GOOGLE_SECRET ?? "",
       // Force account selection so users on shared machines can switch.
       authorization: { params: { prompt: "select_account" } },
+      // Link Google to an existing User row that was first created via
+      // magic-link (or vice-versa) when the email matches. Safe because
+      // Google verifies the email and Nodemailer's magic-link flow only
+      // completes after the user clicks a link sent to that same inbox —
+      // i.e. both providers prove ownership of the address. Without this,
+      // the second provider returns `OAuthAccountNotLinked` and the user
+      // is bounced back to /signin.
+      allowDangerousEmailAccountLinking: true,
     }),
     Nodemailer({
       from: smtpFrom,
