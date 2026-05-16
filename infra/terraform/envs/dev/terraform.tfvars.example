@@ -12,7 +12,12 @@
 # Secret values from §3–§7 are NOT set here. Terraform reads them from
 # Secret Manager at apply time via the compute module's IAM bindings.
 # Make sure §7 was completed (authjs-secret, google-oauth-client-id,
-# google-oauth-client-secret, resend-api-key) before `terraform apply`.
+# google-oauth-client-secret, resend-api-key, tessar-database-url)
+# before `terraform apply`. The tessar-database-url secret holds the
+# full Postgres connection string:
+#   postgresql://${DB_USER}:${DB_PASSWORD}@${SQL_PRIVATE_IP}:5432/tessar
+# Create it once the data module has applied (so the SQL instance,
+# private IP, db, and user exist) — see docs/operations/phase2-prereqs.md.
 # ---------------------------------------------------------------------------
 
 project_id     = "tessar-dev"
@@ -27,3 +32,9 @@ create_dns_zone = false # true ↔ §2.2 Option A (Cloud DNS); false ↔ Option 
 
 deletion_protection = true # set false ONLY for throwaway sandbox apply/destroy cycles
 web_min_instances   = 0    # bump to 1 in prod; keep 0 in dev to save ~$15/mo on idle
+
+# Pre-launch sign-in allowlist (apps/web/auth.config.ts). Empty/missing
+# = bootstrap admin only. Comma-separated emails to add specific testers.
+# "*" disables the gate entirely — only flip to "*" once the Google
+# OAuth consent screen is published (or you've added Google test users).
+auth_allowed_emails = ""

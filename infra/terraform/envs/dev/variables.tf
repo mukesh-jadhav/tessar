@@ -54,3 +54,9 @@ variable "web_min_instances" {
   description = "Min instances for tessar-web."
   default     = 0
 }
+
+variable "auth_allowed_emails" {
+  type        = string
+  description = "Comma-separated pre-launch sign-in allowlist (see apps/web/auth.config.ts). Empty = bootstrap admin only. '*' disables the gate entirely (open sign-in)."
+  default     = ""
+}
