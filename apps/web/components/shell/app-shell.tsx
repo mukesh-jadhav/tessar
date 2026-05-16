@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { UserMenu } from "@/components/shell/user-menu";
 
 /* ---------------------------------------------------------------------------
  * <AppShell> — the chrome for every authenticated screen.
@@ -102,6 +103,9 @@ export function AppShell({
               </Button>
             </Link>
           )}
+          <div className="ml-1.5">
+            <UserMenu />
+          </div>
         </nav>
       </header>
 

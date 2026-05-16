@@ -20,6 +20,7 @@ import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { AppShell } from "@/components/shell/app-shell";
 import { Button } from "@/components/ui/button";
 import { ConfidencePill } from "@/components/ui/confidence-pill";
 import { WhileYouWait } from "@/components/run/while-you-wait";
@@ -294,7 +295,7 @@ export function RunWatch({ runId, briefTitle, briefBody }: Props): React.ReactEl
   }, [state.done, state.failedPhase, state.currentNote, state.currentPhase]);
 
   return (
-    <div className="bg-surface text-on-surface min-h-dvh w-full">
+    <AppShell pageLabel="run">
       {/* Soft brand wash — same canvas language as the rest of the app. */}
       <div
         aria-hidden
@@ -424,7 +425,7 @@ export function RunWatch({ runId, briefTitle, briefBody }: Props): React.ReactEl
           </div>
         </footer>
       </main>
-    </div>
+    </AppShell>
   );
 }
 
@@ -446,26 +447,8 @@ function BriefBar({
   conn: "connecting" | "live" | "retrying" | "done";
 }): React.ReactElement {
   return (
-    <header className="border-outline-variant/60 bg-surface/85 sticky top-0 z-20 border-b backdrop-blur">
-      <div className="mx-auto flex w-full max-w-6xl items-center gap-3 px-6 py-3 md:px-10">
-        <Link href="/" aria-label="Home" className="flex shrink-0 items-center gap-2.5">
-          <span
-            aria-hidden
-            className="bg-primary text-on-primary grid size-6 place-items-center rounded-full"
-          >
-            <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
-              <path
-                d="M1.5 5.6 L4.2 8 L9 2.5"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </span>
-          <span className="text-[12px] font-semibold tracking-tight">TESSAR</span>
-        </Link>
-        <span className="text-on-surface-variant text-[11px]">·</span>
+    <header className="border-outline-variant/60 bg-surface/85 sticky top-[57px] z-20 border-b backdrop-blur">
+      <div className="mx-auto flex w-full max-w-6xl items-center gap-3 px-6 py-2.5 md:px-10">
         <button
           type="button"
           onClick={onToggle}
@@ -473,7 +456,7 @@ function BriefBar({
           aria-expanded={open}
           aria-label="Show full brief"
         >
-          <span className="text-on-surface-variant text-[10px] uppercase tracking-wide">
+          <span className="text-on-surface-variant text-[10px] uppercase tracking-[0.14em]">
             Your brief
           </span>
           <span className="text-on-surface min-w-0 truncate text-[13px] font-medium">{title}</span>

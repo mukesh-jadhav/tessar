@@ -23,9 +23,9 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
+import { AppShell } from "@/components/shell/app-shell";
 import { Button } from "@/components/ui/button";
 import { ConfidencePill } from "@/components/ui/confidence-pill";
-import { ThemeToggle } from "@/components/theme-toggle";
 import {
   ArchitectureDiagram,
   DecisionCard,
@@ -34,6 +34,12 @@ import {
   fmtUsd,
 } from "@/components/package/package-view";
 import { SystemDesignPane } from "@/components/package/system-design-sections";
+import {
+  deriveExecutiveSummary,
+  groupDecisionsByTier,
+  mapRequirementsToArchitecture,
+} from "@/lib/package-synthesis";
+import type { ExecutiveSummary } from "@/lib/package-synthesis";
 import type { ArchNode, BomLine, Decision, Risk, RunPackage } from "@/lib/run-package";
 
 type Section = "verdict" | "system-design" | "decisions" | "numbers" | "risks" | "audit";
@@ -68,8 +74,8 @@ export function DecideViewer({
   const completedLabel = useMemo(() => formatCompleted(completedAt), [completedAt]);
 
   return (
-    <div className="bg-surface text-on-surface min-h-dvh w-full">
-      <Header
+    <AppShell pageLabel="design package">
+      <ActionBar
         runId={runId}
         title={briefTitle}
         completedLabel={completedLabel}
@@ -98,13 +104,19 @@ export function DecideViewer({
           <AuditSection pkg={pkg} runId={runId} completedLabel={completedLabel} />
         ) : null}
       </main>
-    </div>
+    </AppShell>
   );
 }
 
-/* ─── Header & Nav ─────────────────────────────────────────────── */
+/* ─── Action bar & Nav ─────────────────────────────────────────── */
 
-function Header({
+/**
+ * Slim title strip that sits below the AppShell header and above the
+ * section nav. Carries the brief title + completion metadata + export
+ * actions. Sticky so the export buttons stay reachable as the reader
+ * scrolls.
+ */
+function ActionBar({
   runId,
   title,
   completedLabel,
@@ -118,33 +130,16 @@ function Header({
   hasPdf: boolean;
 }): React.ReactElement {
   return (
-    <header className="border-outline-variant/60 bg-surface/85 sticky top-0 z-10 border-b backdrop-blur">
-      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-6 py-4 md:px-10">
-        <div className="flex min-w-0 items-center gap-3">
-          <Link href="/" aria-label="Home" className="flex shrink-0 items-center gap-2.5">
-            <span
-              aria-hidden
-              className="bg-primary text-on-primary grid size-7 place-items-center rounded-full"
-            >
-              <svg width="12" height="12" viewBox="0 0 11 11" fill="none">
-                <path
-                  d="M1.5 5.6 L4.2 8 L9 2.5"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </span>
-            <span className="text-[13px] font-semibold tracking-tight">TESSAR</span>
-          </Link>
-          <span className="text-on-surface-variant text-[12px]">·</span>
-          <div className="min-w-0">
-            <h1 className="truncate text-[15px] font-semibold leading-tight">{title}</h1>
-            <p className="text-on-surface-variant truncate text-[11px]">
-              run #{runId.slice(0, 8)} · completed {completedLabel}
-            </p>
-          </div>
+    <div className="border-outline-variant/60 bg-surface/85 sticky top-[57px] z-10 border-b backdrop-blur">
+      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-6 py-3 md:px-10">
+        <div className="min-w-0">
+          <p className="text-on-surface-variant text-[10px] font-semibold uppercase tracking-[0.14em]">
+            Design package · run #{runId.slice(0, 8)}
+          </p>
+          <h1 className="text-on-surface mt-0.5 truncate text-[18px] font-semibold leading-tight">
+            {title}
+          </h1>
+          <p className="text-on-surface-variant truncate text-[11px]">Completed {completedLabel}</p>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           <Link href={`/run/${runId}`}>
@@ -166,10 +161,9 @@ function Header({
               </Button>
             </a>
           ) : null}
-          <ThemeToggle />
         </div>
       </div>
-    </header>
+    </div>
   );
 }
 
@@ -227,9 +221,14 @@ function VerdictSection({ pkg }: { pkg: RunPackage }): React.ReactElement {
   const scaledCost = useMemo(() => sumAtScale(pkg.bom, 10, 10, 10), [pkg.bom]);
   const topRisks = useMemo(() => sortRisks(pkg.risks).slice(0, 3), [pkg.risks]);
   const requirementsByKind = useMemo(() => groupRequirements(pkg.requirements), [pkg.requirements]);
+  const summary = useMemo(() => deriveExecutiveSummary(pkg), [pkg]);
+  const reqMap = useMemo(() => mapRequirementsToArchitecture(pkg), [pkg]);
 
   return (
     <div className="space-y-10">
+      {/* Executive summary — the answer in one screen. */}
+      <ExecutiveSummaryCard pkg={pkg} summary={summary} />
+
       {/* Brief echo */}
       <Block eyebrow="What we heard" title="Your brief, as we understood it">
         <p className="text-on-surface mb-5 max-w-3xl whitespace-pre-line text-[14px] leading-relaxed">
@@ -320,7 +319,63 @@ function VerdictSection({ pkg }: { pkg: RunPackage }): React.ReactElement {
         </div>
       </Block>
 
-      {/* Top risks (one-liners) */}
+      {/* Requirements → Architecture map */}
+      {reqMap.some((m) => m.rationales.length > 0) ? (
+        <Block eyebrow="Why this fits your brief" title="Requirements mapped to architecture">
+          <p className="text-on-surface-variant mb-5 max-w-2xl text-[13px] leading-relaxed">
+            Every requirement you stated (or that we inferred) is satisfied by one or more
+            components. Each row is one requirement and the specific picks that address it, with the
+            rationale inline.
+          </p>
+          <ul className="divide-outline-variant/60 divide-y">
+            {reqMap.map(({ requirement, rationales }) => (
+              <li key={requirement.id} className="grid gap-4 py-4 md:grid-cols-[260px_1fr]">
+                <div>
+                  <p className="text-on-surface-variant text-[10px] font-semibold uppercase tracking-[0.14em]">
+                    {requirement.label}
+                  </p>
+                  <p className="text-on-surface mt-1 text-[14px] font-medium leading-snug">
+                    {requirement.value}
+                  </p>
+                  <p className="text-on-surface-variant mt-1 text-[10.5px] uppercase tracking-wide">
+                    from {requirement.source}
+                  </p>
+                </div>
+                {rationales.length ? (
+                  <ul className="space-y-3">
+                    {rationales.map(({ rationale, nodeLabel, nodeSub }) => (
+                      <li
+                        key={`${rationale.nodeId}-${rationale.requirementId}`}
+                        className="border-outline-variant/60 bg-surface-container-low rounded-xl border p-4"
+                      >
+                        <div className="flex flex-wrap items-baseline gap-2">
+                          <span className="bg-primary-container/60 text-on-primary-container rounded-full px-2.5 py-0.5 text-[11px] font-semibold">
+                            {nodeLabel}
+                          </span>
+                          {nodeSub ? (
+                            <span className="text-on-surface-variant text-[11px]">{nodeSub}</span>
+                          ) : null}
+                          <span className="text-on-surface-variant ml-auto text-[10px] uppercase tracking-wide">
+                            [{rationale.cite}]
+                          </span>
+                        </div>
+                        <p className="text-on-surface mt-2 text-[13px] leading-relaxed">
+                          {rationale.narrative}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-on-surface-variant text-[12.5px] italic">
+                    No explicit component rationale was emitted for this requirement. See the
+                    architecture diagram and decisions tab.
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </Block>
+      ) : null}
       {topRisks.length ? (
         <Block
           eyebrow="Watch out for"
@@ -354,9 +409,13 @@ function VerdictSection({ pkg }: { pkg: RunPackage }): React.ReactElement {
 /* ─── 2. Decisions ────────────────────────────────────────────── */
 
 function DecisionsSection({ pkg }: { pkg: RunPackage }): React.ReactElement {
-  const [sortMode, setSortMode] = useState<"order" | "confidence" | "blast">("order");
+  const [sortMode, setSortMode] = useState<"tier" | "order" | "confidence" | "blast">("tier");
 
-  const sorted = useMemo(() => sortDecisions(pkg.decisions, sortMode), [pkg.decisions, sortMode]);
+  const sorted = useMemo(
+    () => (sortMode === "tier" ? pkg.decisions : sortDecisions(pkg.decisions, sortMode)),
+    [pkg.decisions, sortMode],
+  );
+  const tiers = useMemo(() => groupDecisionsByTier(pkg.decisions), [pkg.decisions]);
 
   return (
     <div className="space-y-6">
@@ -371,7 +430,7 @@ function DecisionsSection({ pkg }: { pkg: RunPackage }): React.ReactElement {
         </p>
         <div className="mt-4 flex items-center gap-2 text-[12px]">
           <span className="text-on-surface-variant">Sort by</span>
-          {(["order", "confidence", "blast"] as const).map((m) => (
+          {(["tier", "order", "confidence", "blast"] as const).map((m) => (
             <button
               key={m}
               onClick={() => setSortMode(m)}
@@ -382,18 +441,76 @@ function DecisionsSection({ pkg }: { pkg: RunPackage }): React.ReactElement {
                   : "bg-surface-container-low text-on-surface-variant hover:text-on-surface",
               ].join(" ")}
             >
-              {m === "order" ? "Run order" : m === "confidence" ? "Confidence" : "Blast radius"}
+              {m === "tier"
+                ? "Foundational first"
+                : m === "order"
+                  ? "Run order"
+                  : m === "confidence"
+                    ? "Confidence"
+                    : "Blast radius"}
             </button>
           ))}
         </div>
       </Block>
 
+      {sortMode === "tier" ? (
+        <div className="space-y-8">
+          <DecisionTier
+            label="Foundational"
+            hint="Hard-to-reverse picks that shape everything downstream. Change carefully."
+            count={tiers.foundational.length}
+            decisions={tiers.foundational}
+            sources={pkg.sources}
+          />
+          <DecisionTier
+            label="Dependent"
+            hint="Picks that follow from the foundation. Easier to swap later."
+            count={tiers.dependent.length}
+            decisions={tiers.dependent}
+            sources={pkg.sources}
+          />
+        </div>
+      ) : (
+        <div className="grid gap-4">
+          {sorted.map((d) => (
+            <DecisionCard key={d.id} decision={d} sources={pkg.sources} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DecisionTier({
+  label,
+  hint,
+  count,
+  decisions,
+  sources,
+}: {
+  label: string;
+  hint: string;
+  count: number;
+  decisions: Decision[];
+  sources: RunPackage["sources"];
+}): React.ReactElement | null {
+  if (!count) return null;
+  return (
+    <section>
+      <header className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <p className="text-primary text-[10px] font-semibold uppercase tracking-[0.14em]">
+            {label} · {count}
+          </p>
+          <p className="text-on-surface-variant text-[12.5px] leading-snug">{hint}</p>
+        </div>
+      </header>
       <div className="grid gap-4">
-        {sorted.map((d) => (
-          <DecisionCard key={d.id} decision={d} sources={pkg.sources} />
+        {decisions.map((d) => (
+          <DecisionCard key={d.id} decision={d} sources={sources} />
         ))}
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -713,11 +830,203 @@ function Block({
         <p className="text-primary text-[10px] font-semibold uppercase tracking-[0.12em]">
           {eyebrow}
         </p>
-        <h2 className="text-on-surface text-[20px] font-semibold leading-tight">{title}</h2>
+        <h2 className="text-on-surface text-[22px] font-semibold leading-tight">{title}</h2>
       </header>
       {children}
     </section>
   );
+}
+
+/* ─── Executive Summary ──────────────────────────────────────── */
+
+/**
+ * The "answer in one screen" — sits at the very top of Verdict.
+ *
+ * Synthesises:
+ *   - one-line brief title
+ *   - up-to-5 headline picks as chips (each tied to its "why")
+ *   - baseline + 10× cost + top cost driver
+ *   - top risk
+ *   - first 3 build phases
+ *
+ * Intentionally denser typography than the rest of the page: this is the
+ * thing the reader trusts first. Everything below is drill-down.
+ */
+function ExecutiveSummaryCard({
+  pkg,
+  summary,
+}: {
+  pkg: RunPackage;
+  summary: ExecutiveSummary;
+}): React.ReactElement {
+  const { picks, phases, baseline, scaled10x, costDriver, risk } = summary;
+  // Index rationales by their target node so each headline pick can carry a
+  // one-line "fits because" caption when the architect emitted one.
+  const rationaleByNode = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const r of pkg.componentRationales) {
+      if (!m.has(r.nodeId)) m.set(r.nodeId, r.narrative);
+    }
+    return m;
+  }, [pkg.componentRationales]);
+
+  const nodeByLabel = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const n of pkg.nodes) m.set(n.label.toLowerCase(), n.id);
+    return m;
+  }, [pkg.nodes]);
+
+  return (
+    <section
+      aria-label="Executive summary"
+      className="border-outline-variant/60 bg-surface-container-low/70 relative overflow-hidden rounded-3xl border p-6 shadow-[0_30px_80px_-50px_rgb(0_0_0/0.35)] md:p-8"
+    >
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -right-24 -top-24 size-72 rounded-full opacity-40 blur-3xl"
+        style={{ background: "rgb(var(--md-sys-color-primary) / 0.18)" }}
+      />
+      <div className="relative">
+        <p className="text-primary text-[10px] font-semibold uppercase tracking-[0.18em]">
+          Executive summary
+        </p>
+        <h2 className="text-on-surface mt-2 max-w-3xl text-[26px] font-semibold leading-[1.2] md:text-[30px]">
+          {pickHeadline(pkg.brief)}
+        </h2>
+
+        {/* The shape: picks with one-line rationale each. */}
+        {picks.length ? (
+          <div className="mt-7">
+            <p className="text-on-surface-variant text-[10px] font-semibold uppercase tracking-[0.14em]">
+              The shape
+            </p>
+            <ul className="mt-3 grid gap-2.5 sm:grid-cols-2">
+              {picks.map((p) => {
+                const nodeId = nodeByLabel.get(p.pick.toLowerCase());
+                const fits = (nodeId && rationaleByNode.get(nodeId)) || p.why;
+                return (
+                  <li
+                    key={p.id}
+                    className="border-outline-variant/50 bg-surface/70 flex items-start gap-3 rounded-xl border px-3.5 py-3"
+                  >
+                    <span
+                      aria-hidden
+                      className="bg-primary mt-1.5 size-1.5 shrink-0 rounded-full"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-baseline gap-x-2">
+                        <span className="text-on-surface-variant text-[10.5px] font-semibold uppercase tracking-wide">
+                          {p.topic}
+                        </span>
+                        <span className="text-on-surface text-[14px] font-semibold">{p.pick}</span>
+                      </div>
+                      <p className="text-on-surface-variant mt-1 line-clamp-2 text-[12px] leading-snug">
+                        {fits}
+                      </p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ) : null}
+
+        {/* Stat row: baseline, scaled, top risk. */}
+        <div className="mt-7 grid gap-3 sm:grid-cols-3">
+          <SummaryStat
+            label="Cost · today"
+            value={fmtUsd(baseline)}
+            sub="per month, list price"
+            highlight
+          />
+          <SummaryStat
+            label="At 10× scale"
+            value={fmtUsd(scaled10x)}
+            sub={costDriver ? `driver: ${costDriver.name}` : "per month"}
+          />
+          <SummaryStat
+            label="Top risk"
+            value={risk?.title ?? "—"}
+            sub={
+              risk
+                ? `${risk.severity} severity · ${risk.likelihood} likelihood`
+                : "no risks flagged"
+            }
+          />
+        </div>
+
+        {/* Build order. */}
+        {phases.length ? (
+          <div className="mt-7">
+            <p className="text-on-surface-variant text-[10px] font-semibold uppercase tracking-[0.14em]">
+              Build it in this order
+            </p>
+            <ol className="mt-3 grid gap-2.5 md:grid-cols-3">
+              {phases.map((ph, i) => (
+                <li
+                  key={ph.id}
+                  className="border-outline-variant/50 bg-surface/70 rounded-xl border px-3.5 py-3"
+                >
+                  <div className="flex items-baseline gap-2">
+                    <span className="bg-primary-container text-on-primary-container grid size-5 place-items-center rounded-full text-[10px] font-bold">
+                      {i + 1}
+                    </span>
+                    <span className="text-on-surface-variant text-[10px] uppercase tracking-wide">
+                      {ph.label}
+                    </span>
+                  </div>
+                  <p className="text-on-surface mt-1.5 text-[13px] font-semibold leading-snug">
+                    {ph.title}
+                  </p>
+                  <p className="text-on-surface-variant mt-1 line-clamp-2 text-[11.5px] leading-snug">
+                    {ph.rationale}
+                  </p>
+                </li>
+              ))}
+            </ol>
+          </div>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function SummaryStat({
+  label,
+  value,
+  sub,
+  highlight = false,
+}: {
+  label: string;
+  value: string;
+  sub: string;
+  highlight?: boolean;
+}): React.ReactElement {
+  return (
+    <div
+      className={[
+        "rounded-xl border px-4 py-3",
+        highlight
+          ? "border-primary/40 bg-primary-container/40"
+          : "border-outline-variant/50 bg-surface/70",
+      ].join(" ")}
+    >
+      <p className="text-on-surface-variant text-[10px] font-semibold uppercase tracking-[0.14em]">
+        {label}
+      </p>
+      <p className="text-on-surface mt-1 truncate text-[18px] font-semibold tabular-nums">
+        {value}
+      </p>
+      <p className="text-on-surface-variant truncate text-[11px]">{sub}</p>
+    </div>
+  );
+}
+
+function pickHeadline(brief: string): string {
+  const cleaned = brief.trim().replace(/\s+/g, " ");
+  if (!cleaned) return "Your researched architecture, in one screen.";
+  if (cleaned.length <= 180) return cleaned;
+  return cleaned.slice(0, 177) + "…";
 }
 
 /* ─── Helpers ─────────────────────────────────────────────────── */

@@ -24,7 +24,8 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Sequence
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeoutError
 from typing import TYPE_CHECKING
 
 from .budget import BudgetExceeded, BudgetTracker
@@ -193,9 +194,7 @@ class LlmRouter:
                 tier.value,
                 deadline,
             )
-            raise TransientProviderError(
-                f"{provider.name}: timed out after {deadline:g}s"
-            ) from e
+            raise TransientProviderError(f"{provider.name}: timed out after {deadline:g}s") from e
 
 
 def _approx_prompt_tokens(messages: Iterable[LlmMessage]) -> int:
