@@ -229,8 +229,12 @@ resource "google_cloud_run_v2_service" "web" {
     containers {
       image = "us-docker.pkg.dev/cloudrun/container/hello"
 
+      # Cloud Run injects PORT into the container; Next.js binds to it.
+      # We use 8080 (Cloud Run default) to match the live service — the
+      # CI image listens on $PORT so any value works, but keeping TF
+      # aligned with reality avoids spurious plan diffs.
       ports {
-        container_port = 3000
+        container_port = 8080
       }
 
       resources {
@@ -373,8 +377,13 @@ resource "google_cloud_run_v2_service" "orchestrator" {
   }
 
   lifecycle {
+    # Same reasoning as tessar-web above: env vars (REDIS_URL,
+    # GOOGLE_CLOUD_PROJECT, DATABASE_URL, Sentry DSN, etc.) are managed
+    # out-of-band by CI / one-off `gcloud run services update` calls.
+    # Letting TF rewrite the env block would strip them.
     ignore_changes = [
       template[0].containers[0].image,
+      template[0].containers[0].env,
       client,
       client_version,
     ]
