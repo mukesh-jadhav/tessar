@@ -64,7 +64,6 @@ locals {
     "google-oauth-client-secret",
     "resend-api-key",
     "sentry-dsn-web",
-    var.database_url_secret_id,
   ]
 
   orchestrator_secret_ids = [
@@ -274,101 +273,24 @@ resource "google_cloud_run_v2_service" "web" {
         name  = "PUBSUB_TOPIC_RUNS"
         value = google_pubsub_topic.runs.name
       }
-
-      # --- Auth.js v5 -----------------------------------------------------
-      # Public origin Auth.js uses to build callback URLs. `trustHost`
-      # is already true in auth.config.ts, but AUTH_URL is still the
-      # canonical source when the request arrives through the Global LB.
-      env {
-        name  = "AUTH_URL"
-        value = var.auth_url
-      }
-      env {
-        name  = "AUTH_ALLOWED_EMAILS"
-        value = var.auth_allowed_emails
-      }
-      env {
-        name = "AUTH_SECRET"
-        value_source {
-          secret_key_ref {
-            secret  = "authjs-secret"
-            version = "latest"
-          }
-        }
-      }
-      env {
-        name = "AUTH_GOOGLE_ID"
-        value_source {
-          secret_key_ref {
-            secret  = "google-oauth-client-id"
-            version = "latest"
-          }
-        }
-      }
-      env {
-        name = "AUTH_GOOGLE_SECRET"
-        value_source {
-          secret_key_ref {
-            secret  = "google-oauth-client-secret"
-            version = "latest"
-          }
-        }
-      }
-
-      # --- Magic-link SMTP (Resend) --------------------------------------
-      env {
-        name  = "SMTP_HOST"
-        value = var.smtp_host
-      }
-      env {
-        name  = "SMTP_PORT"
-        value = tostring(var.smtp_port)
-      }
-      env {
-        name  = "SMTP_USER"
-        value = var.smtp_user
-      }
-      env {
-        name  = "AUTH_EMAIL_FROM"
-        value = var.auth_email_from
-      }
-      env {
-        name = "SMTP_PASSWORD"
-        value_source {
-          secret_key_ref {
-            secret  = "resend-api-key"
-            version = "latest"
-          }
-        }
-      }
-
-      # --- Prisma / Postgres ---------------------------------------------
-      # Full connection string lives in Secret Manager (created out-of-
-      # band so the password never lands in tfstate). Format:
-      #   postgresql://${db_user}:${db_password}@${sql_private_ip}:5432/${database_name}
-      env {
-        name = "DATABASE_URL"
-        value_source {
-          secret_key_ref {
-            secret  = var.database_url_secret_id
-            version = "latest"
-          }
-        }
-      }
-      env {
-        name  = "DATABASE_NAME"
-        value = var.database_name
-      }
-      env {
-        name  = "DATABASE_USER"
-        value = var.db_user
-      }
     }
   }
 
   lifecycle {
+    # The full env block (AUTH_*, SMTP_*, DATABASE_URL, REDIS_URL,
+    # BILLING_ENABLED, Sentry, etc.) is managed out-of-band by CI
+    # (`gcloud run deploy --update-env-vars` in .github/workflows/main.yml)
+    # and by one-off `gcloud run services update` calls. Listing every
+    # var here would constantly drift against those external updates,
+    # so Terraform owns the eight bootstrap env vars above (which it
+    # creates fresh on first apply) and then defers to runtime tooling
+    # for everything else. If you ever flip this back to TF-managed,
+    # remove `template[0].containers[0].env` from ignore_changes AND
+    # add every env var the live service currently has — otherwise
+    # apply will strip them.
     ignore_changes = [
       template[0].containers[0].image,
+      template[0].containers[0].env,
       client,
       client_version,
     ]

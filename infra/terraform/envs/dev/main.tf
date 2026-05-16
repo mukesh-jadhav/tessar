@@ -35,14 +35,6 @@ module "compute" {
   db_password_secret_id = module.data.db_password_secret_id
   redis_auth_secret_id  = module.data.redis_auth_secret_id
   web_min_instances     = var.web_min_instances
-
-  # Auth.js + magic-link wiring. Secrets (authjs-secret,
-  # google-oauth-client-*, resend-api-key, tessar-database-url) are
-  # seeded out-of-band in Secret Manager — Terraform only mounts them.
-  auth_url            = "https://${var.fqdn}"
-  auth_allowed_emails = var.auth_allowed_emails
-  database_name       = module.data.database_name
-  db_user             = module.data.db_user
 }
 
 module "edge" {
