@@ -223,13 +223,20 @@ function SignInPanel({
         <span className="bg-outline-variant h-px flex-1" />
       </div>
 
+      {/*
+        Google sign-in button — follows the official Google Identity
+        Services brand spec (pill variant): white surface, #747775 1px
+        border, 4-color G mark, "Sign in with Google" wordmark, Roboto
+        500. Spec: https://developers.google.com/identity/branding-guidelines
+      */}
       <button
         type="button"
         onClick={onGoogle}
-        className="border-outline-variant bg-surface text-on-surface hover:border-primary hover:bg-primary/[0.04] flex w-full items-center justify-center gap-2 rounded-lg border py-2.5 text-[12.5px] font-semibold transition-colors"
+        className="flex h-10 w-full items-center justify-center gap-3 rounded-full border border-[#747775] bg-white px-3 text-[14px] font-medium text-[#1f1f1f] transition-shadow hover:shadow-[0_1px_3px_rgb(60_64_67/0.15),0_1px_2px_rgb(60_64_67/0.30)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1f1f1f]/30 active:shadow-none"
+        style={{ fontFamily: "'Roboto', system-ui, sans-serif" }}
       >
         <GoogleMark />
-        Continue with Google
+        Sign in with Google
       </button>
 
       <p className="text-on-surface-variant mt-5 text-center text-[10.5px]">
@@ -299,7 +306,7 @@ function ConfirmationPanel({
 
 function GoogleMark(): React.ReactElement {
   return (
-    <svg width="16" height="16" viewBox="0 0 18 18" aria-hidden>
+    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
       <path
         fill="#4285F4"
         d="M17.64 9.2c0-.64-.06-1.25-.17-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.71v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.61z"
