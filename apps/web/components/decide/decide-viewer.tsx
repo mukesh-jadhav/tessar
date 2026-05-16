@@ -290,7 +290,7 @@ function VerdictSection({ pkg }: { pkg: RunPackage }): React.ReactElement {
 
       {/* The diagram */}
       <Block eyebrow="The architecture" title="How the pieces fit">
-        <div className="grid gap-5 lg:grid-cols-[1.6fr_1fr]">
+        <div className="space-y-4">
           <div>
             <ArchitectureDiagram
               nodes={pkg.nodes}
@@ -298,11 +298,11 @@ function VerdictSection({ pkg }: { pkg: RunPackage }): React.ReactElement {
               focus={focus}
               onFocus={setFocus}
             />
-            <p className="text-on-surface-variant mt-2 text-[11px]">
+            <p className="text-on-surface-variant mt-2 text-[12px]">
               Click any component for the why, scaling notes, and alternatives considered.
             </p>
           </div>
-          <div className="border-outline-variant/60 bg-surface-container-low min-h-[200px] rounded-xl border p-5">
+          <div className="border-outline-variant/60 bg-surface-container-low min-h-[160px] rounded-xl border p-5">
             {focused ? (
               <NodeDetail node={focused} sources={pkg.sources} />
             ) : (
@@ -311,7 +311,7 @@ function VerdictSection({ pkg }: { pkg: RunPackage }): React.ReactElement {
                   {pkg.nodes.length} components, {pkg.edges.length} connections
                 </p>
                 <p className="leading-relaxed">
-                  Click any box to see why it was chosen, what it costs at scale, and what
+                  Click any box above to see why it was chosen, what it costs at scale, and what
                   alternatives we considered.
                 </p>
               </div>

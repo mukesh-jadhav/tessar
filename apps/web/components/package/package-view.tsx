@@ -335,6 +335,18 @@ const ZONE_COLORS: Record<Zone, string> = {
   external: "rgb(var(--md-sys-color-surface-container))",
 };
 
+const ZONE_LABELS: Record<Zone, string> = {
+  client: "Client",
+  edge: "Edge",
+  app: "App",
+  data: "Data",
+  external: "External",
+};
+
+// Order zones top-to-bottom for the legend; reuses the same ordering the
+// architect agent uses when placing nodes vertically.
+const ZONE_ORDER: Zone[] = ["client", "edge", "app", "data", "external"];
+
 export function ArchitectureDiagram({
   nodes,
   edges,
@@ -347,12 +359,20 @@ export function ArchitectureDiagram({
   onFocus: (id: string | null) => void;
 }): React.ReactElement {
   const byId = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
+
+  // Only show legend entries for zones actually present in this package.
+  const presentZones = useMemo(() => {
+    const set = new Set(nodes.map((n) => n.zone));
+    return ZONE_ORDER.filter((z) => set.has(z));
+  }, [nodes]);
+
   return (
-    <div className="bg-surface-container-low aspect-[16/10] w-full overflow-hidden rounded-xl">
+    <div className="bg-surface-container-low w-full overflow-hidden rounded-xl">
       <svg
         viewBox="0 0 100 100"
         preserveAspectRatio="xMidYMid meet"
-        className="h-full w-full"
+        className="block h-auto w-full"
+        style={{ minHeight: "560px", aspectRatio: "16 / 11" }}
         role="img"
         aria-label="Architecture diagram"
       >
@@ -362,8 +382,8 @@ export function ArchitectureDiagram({
             viewBox="0 0 8 8"
             refX="7"
             refY="4"
-            markerWidth="3.5"
-            markerHeight="3.5"
+            markerWidth="4"
+            markerHeight="4"
             orient="auto"
           >
             <path d="M0 0 L8 4 L0 8 z" fill="rgb(var(--md-sys-color-outline))" />
@@ -376,6 +396,7 @@ export function ArchitectureDiagram({
           const b = byId.get(e.to);
           if (!a || !b) return null;
           const dashed = e.kind === "async" || e.kind === "data";
+          const dim = focus !== null && focus !== e.from && focus !== e.to;
           return (
             <line
               key={`${e.from}-${e.to}-${i}`}
@@ -384,9 +405,9 @@ export function ArchitectureDiagram({
               x2={b.x}
               y2={b.y}
               stroke="rgb(var(--md-sys-color-outline))"
-              strokeWidth={0.35}
-              strokeDasharray={dashed ? "1.2 0.8" : undefined}
-              opacity={0.7}
+              strokeWidth={0.45}
+              strokeDasharray={dashed ? "1.4 0.9" : undefined}
+              opacity={dim ? 0.25 : 0.75}
               markerEnd="url(#pkg-arrow)"
             />
           );
@@ -394,36 +415,38 @@ export function ArchitectureDiagram({
 
         {/* Nodes */}
         {nodes.map((n) => {
-          const w = Math.max(n.w || 16, 14);
-          const h = 9;
+          const w = Math.max(n.w || 18, 17);
+          const h = 11;
           const isFocus = focus === n.id;
+          const dim = focus !== null && !isFocus;
           return (
             <g
               key={n.id}
               transform={`translate(${n.x - w / 2}, ${n.y - h / 2})`}
               className="cursor-pointer"
               onClick={() => onFocus(isFocus ? null : n.id)}
+              opacity={dim ? 0.55 : 1}
             >
               <rect
                 x={0}
                 y={0}
                 width={w}
                 height={h}
-                rx={1.4}
+                rx={1.6}
                 fill={ZONE_COLORS[n.zone] ?? "rgb(var(--md-sys-color-surface-container))"}
                 stroke={
                   isFocus
                     ? "rgb(var(--md-sys-color-primary))"
                     : "rgb(var(--md-sys-color-outline-variant))"
                 }
-                strokeWidth={isFocus ? 0.5 : 0.2}
+                strokeWidth={isFocus ? 0.7 : 0.25}
               />
               <text
                 x={w / 2}
-                y={h / 2 - 0.6}
+                y={h / 2 - 0.9}
                 textAnchor="middle"
                 dominantBaseline="middle"
-                fontSize={2.1}
+                fontSize={2.6}
                 fontWeight={600}
                 fill="rgb(var(--md-sys-color-on-surface))"
               >
@@ -431,17 +454,87 @@ export function ArchitectureDiagram({
               </text>
               <text
                 x={w / 2}
-                y={h / 2 + 2.3}
+                y={h / 2 + 2.6}
                 textAnchor="middle"
                 dominantBaseline="middle"
-                fontSize={1.5}
+                fontSize={1.8}
                 fill="rgb(var(--md-sys-color-on-surface-variant))"
               >
-                {truncate(n.sub, 36)}
+                {truncate(n.sub, 34)}
               </text>
             </g>
           );
         })}
+
+        {/* Zone legend, bottom-left */}
+        {presentZones.map((z, i) => {
+          const x = 1.5 + i * 13;
+          const y = 96;
+          return (
+            <g key={z} transform={`translate(${x}, ${y})`}>
+              <rect
+                x={0}
+                y={-1.8}
+                width={2.2}
+                height={2.2}
+                rx={0.4}
+                fill={ZONE_COLORS[z]}
+                stroke="rgb(var(--md-sys-color-outline-variant))"
+                strokeWidth={0.15}
+              />
+              <text
+                x={3}
+                y={0}
+                fontSize={1.8}
+                dominantBaseline="middle"
+                fill="rgb(var(--md-sys-color-on-surface-variant))"
+              >
+                {ZONE_LABELS[z]}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Edge-style legend, bottom-right */}
+        <g transform="translate(78, 96)">
+          <line
+            x1={0}
+            y1={-0.8}
+            x2={4}
+            y2={-0.8}
+            stroke="rgb(var(--md-sys-color-outline))"
+            strokeWidth={0.45}
+            markerEnd="url(#pkg-arrow)"
+          />
+          <text
+            x={5}
+            y={0}
+            fontSize={1.8}
+            dominantBaseline="middle"
+            fill="rgb(var(--md-sys-color-on-surface-variant))"
+          >
+            sync
+          </text>
+          <line
+            x1={11}
+            y1={-0.8}
+            x2={15}
+            y2={-0.8}
+            stroke="rgb(var(--md-sys-color-outline))"
+            strokeWidth={0.45}
+            strokeDasharray="1.4 0.9"
+            markerEnd="url(#pkg-arrow)"
+          />
+          <text
+            x={16}
+            y={0}
+            fontSize={1.8}
+            dominantBaseline="middle"
+            fill="rgb(var(--md-sys-color-on-surface-variant))"
+          >
+            async / data
+          </text>
+        </g>
       </svg>
     </div>
   );
