@@ -29,21 +29,39 @@ const PROTECTED_PREFIXES = [
  * always includes the bootstrap admin so a misconfigured env can't
  * lock the team out of dev.
  *
+ * Setting the value to ``*`` (or including ``*`` as one of the
+ * comma-separated entries) disables the gate entirely — any email
+ * that completes OAuth / magic-link verification is allowed in. Use
+ * this for dev/demo environments and for the Phase 6 public-launch
+ * flip; do NOT ship it to prod while the closed beta is still on.
+ *
  * Returning ``false`` from the ``signIn`` callback aborts the OAuth
  * exchange / magic-link verification cleanly — the user is bounced to
  * ``pages.error`` (= ``/unauthorized``) without a session ever being
  * issued.
  */
 const BOOTSTRAP_ADMIN_EMAIL = "[email protected]";
+const WILDCARD = "*";
 
-function loadAllowlist(): ReadonlySet<string> {
+interface Allowlist {
+  open: boolean;
+  emails: ReadonlySet<string>;
+}
+
+function loadAllowlist(): Allowlist {
   const raw = process.env.AUTH_ALLOWED_EMAILS ?? "";
   const set = new Set<string>([BOOTSTRAP_ADMIN_EMAIL.toLowerCase()]);
+  let open = false;
   for (const entry of raw.split(",")) {
     const trimmed = entry.trim().toLowerCase();
-    if (trimmed) set.add(trimmed);
+    if (!trimmed) continue;
+    if (trimmed === WILDCARD) {
+      open = true;
+      continue;
+    }
+    set.add(trimmed);
   }
-  return set;
+  return { open, emails: set };
 }
 
 export const authConfig = {
@@ -68,7 +86,9 @@ export const authConfig = {
         .trim()
         .toLowerCase();
       if (!email) return false;
-      return loadAllowlist().has(email);
+      const list = loadAllowlist();
+      if (list.open) return true;
+      return list.emails.has(email);
     },
     authorized({ auth, request }) {
       const { pathname } = request.nextUrl;
