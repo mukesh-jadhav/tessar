@@ -358,7 +358,38 @@ export function ArchitectureDiagram({
   focus: string | null;
   onFocus: (id: string | null) => void;
 }): React.ReactElement {
-  const byId = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
+  // Auto-spread node coords to fill a generous padded canvas so the
+  // architect's tightly-packed source coordinates don't render as
+  // overlapping boxes. We map the input bbox into [PAD_X..100-PAD_X]
+  // horizontally and [PAD_Y_TOP..PAD_Y_BOTTOM] vertically (leaving room
+  // for the legend strip at y=96).
+  const PAD_X = 9;
+  const PAD_Y_TOP = 9;
+  const PAD_Y_BOTTOM = 86;
+
+  const layout = useMemo(() => {
+    if (nodes.length === 0) return new Map<string, { x: number; y: number }>();
+    const xs = nodes.map((n) => n.x);
+    const ys = nodes.map((n) => n.y);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    const spanX = Math.max(maxX - minX, 1);
+    const spanY = Math.max(maxY - minY, 1);
+    const targetW = 100 - 2 * PAD_X;
+    const targetH = PAD_Y_BOTTOM - PAD_Y_TOP;
+    const m = new Map<string, { x: number; y: number }>();
+    for (const n of nodes) {
+      m.set(n.id, {
+        x: PAD_X + ((n.x - minX) / spanX) * targetW,
+        y: PAD_Y_TOP + ((n.y - minY) / spanY) * targetH,
+      });
+    }
+    return m;
+  }, [nodes]);
+
+  const posOf = (id: string) => layout.get(id) ?? { x: 50, y: 50 };
 
   // Only show legend entries for zones actually present in this package.
   const presentZones = useMemo(() => {
@@ -372,7 +403,7 @@ export function ArchitectureDiagram({
         viewBox="0 0 100 100"
         preserveAspectRatio="xMidYMid meet"
         className="block h-auto w-full"
-        style={{ minHeight: "560px", aspectRatio: "16 / 11" }}
+        style={{ minHeight: "600px", aspectRatio: "16 / 11" }}
         role="img"
         aria-label="Architecture diagram"
       >
@@ -392,9 +423,9 @@ export function ArchitectureDiagram({
 
         {/* Edges first so nodes draw on top */}
         {edges.map((e, i) => {
-          const a = byId.get(e.from);
-          const b = byId.get(e.to);
-          if (!a || !b) return null;
+          const a = posOf(e.from);
+          const b = posOf(e.to);
+          if (!layout.has(e.from) || !layout.has(e.to)) return null;
           const dashed = e.kind === "async" || e.kind === "data";
           const dim = focus !== null && focus !== e.from && focus !== e.to;
           return (
@@ -405,9 +436,9 @@ export function ArchitectureDiagram({
               x2={b.x}
               y2={b.y}
               stroke="rgb(var(--md-sys-color-outline))"
-              strokeWidth={0.45}
-              strokeDasharray={dashed ? "1.4 0.9" : undefined}
-              opacity={dim ? 0.25 : 0.75}
+              strokeWidth={0.4}
+              strokeDasharray={dashed ? "1.2 0.8" : undefined}
+              opacity={dim ? 0.2 : 0.7}
               markerEnd="url(#pkg-arrow)"
             />
           );
@@ -415,14 +446,18 @@ export function ArchitectureDiagram({
 
         {/* Nodes */}
         {nodes.map((n) => {
-          const w = Math.max(n.w || 18, 17);
-          const h = 11;
+          const pos = posOf(n.id);
+          // Fixed box size keeps the layout predictable; labels truncate
+          // to fit. Architect's `w` is intentionally ignored — it was
+          // calibrated for the old (smaller) coordinate density.
+          const w = 15;
+          const h = 9;
           const isFocus = focus === n.id;
           const dim = focus !== null && !isFocus;
           return (
             <g
               key={n.id}
-              transform={`translate(${n.x - w / 2}, ${n.y - h / 2})`}
+              transform={`translate(${pos.x - w / 2}, ${pos.y - h / 2})`}
               className="cursor-pointer"
               onClick={() => onFocus(isFocus ? null : n.id)}
               opacity={dim ? 0.55 : 1}
@@ -432,35 +467,35 @@ export function ArchitectureDiagram({
                 y={0}
                 width={w}
                 height={h}
-                rx={1.6}
+                rx={1.4}
                 fill={ZONE_COLORS[n.zone] ?? "rgb(var(--md-sys-color-surface-container))"}
                 stroke={
                   isFocus
                     ? "rgb(var(--md-sys-color-primary))"
                     : "rgb(var(--md-sys-color-outline-variant))"
                 }
-                strokeWidth={isFocus ? 0.7 : 0.25}
+                strokeWidth={isFocus ? 0.6 : 0.2}
               />
               <text
                 x={w / 2}
-                y={h / 2 - 0.9}
+                y={h / 2 - 0.7}
                 textAnchor="middle"
                 dominantBaseline="middle"
-                fontSize={2.6}
+                fontSize={2.0}
                 fontWeight={600}
                 fill="rgb(var(--md-sys-color-on-surface))"
               >
-                {n.label}
+                {truncate(n.label, 16)}
               </text>
               <text
                 x={w / 2}
-                y={h / 2 + 2.6}
+                y={h / 2 + 2.0}
                 textAnchor="middle"
                 dominantBaseline="middle"
-                fontSize={1.8}
+                fontSize={1.4}
                 fill="rgb(var(--md-sys-color-on-surface-variant))"
               >
-                {truncate(n.sub, 34)}
+                {truncate(n.sub, 22)}
               </text>
             </g>
           );
