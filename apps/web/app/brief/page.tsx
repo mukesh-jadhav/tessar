@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { AppShell } from "@/components/shell/app-shell";
+import { BriefSubmitOverlay } from "@/components/brief/brief-submit-overlay";
 import { springs } from "@/lib/motion/springs";
 import { PRICE_PER_RUN_LABEL } from "@/lib/pricing";
 
@@ -285,6 +286,7 @@ export default function BriefPage(): React.ReactElement {
 
   return (
     <AppShell pageLabel="new brief">
+      <BriefSubmitOverlay open={submitting} />
       {/* Main column — single, narrow, focused. Page scrolls past the fold. */}
       <main className="relative mx-auto w-full max-w-[760px] px-5 pb-32 pt-10 md:px-8 md:pt-16">
         <motion.div

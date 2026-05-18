@@ -3,6 +3,7 @@ import { JetBrains_Mono, Plus_Jakarta_Sans } from "next/font/google";
 
 import { ThemeProvider } from "@/components/theme-provider";
 import { MotionPreferences } from "@/components/motion-preferences";
+import { RouteProgress } from "@/components/shell/route-progress";
 
 import "./globals.css";
 
@@ -44,7 +45,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }): React.ReactElement {
   return (
-    <html lang="en" className={`${plusJakarta.variable} ${monoFont.variable}`} suppressHydrationWarning>
+    <html
+      lang="en"
+      className={`${plusJakarta.variable} ${monoFont.variable}`}
+      suppressHydrationWarning
+    >
       <head>
         {/* Material Symbols (variable font, rounded). Single icon source for the whole UI. */}
         {/* eslint-disable-next-line @next/next/no-page-custom-font */}
@@ -55,7 +60,10 @@ export default function RootLayout({
       </head>
       <body className="bg-surface text-on-surface font-sans antialiased">
         <ThemeProvider>
-          <MotionPreferences>{children}</MotionPreferences>
+          <MotionPreferences>
+            <RouteProgress />
+            {children}
+          </MotionPreferences>
         </ThemeProvider>
       </body>
     </html>
