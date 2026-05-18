@@ -132,6 +132,22 @@ def test_classify_unknown_exception_is_not_transient() -> None:
     assert _classify_error(ValueError("bad input")) is False
 
 
+def test_classify_not_found_is_transient() -> None:
+    """404 PERMANENT-for-Claude (model not enabled in this project) must
+    fall over to the next Tier-A provider (Gemini Pro per ADR-0015) —
+    otherwise the synthesizer dies until someone hits the Model Garden
+    enable button."""
+
+    class NotFoundError(Exception):
+        pass
+
+    class PermissionDeniedError(Exception):
+        pass
+
+    assert _classify_error(NotFoundError("Publisher Model … was not found")) is True
+    assert _classify_error(PermissionDeniedError("aiplatform.endpoints.predict denied")) is True
+
+
 # ─── generate() — with mocked Anthropic SDK ──────────────────────
 
 

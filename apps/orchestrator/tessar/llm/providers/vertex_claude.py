@@ -62,6 +62,13 @@ _TRANSIENT_NAMES = {
     "InternalServerError",
     "ServiceUnavailableError",
     "OverloadedError",
+    # 404 / 403 are PERMANENT on Claude (model not enabled in this project,
+    # SA lacks Vertex permission, or wrong region), but they're NOT
+    # permanent for the run — the router should fall over to the next
+    # Tier-A provider (Gemini Pro per ADR-0015). Without this, a missing
+    # Model Garden enable kills every run on the synthesizer.
+    "NotFoundError",
+    "PermissionDeniedError",
 }
 _TRANSIENT_STATUS = {429, 500, 502, 503, 504}
 
