@@ -132,13 +132,3 @@ jobs:
             echo "::error::regression vs baseline detected"
             exit 1
           fi
-
-      # Slack notify on failure (env-gated — secret may not be set yet).
-      - name: Notify Slack on failure
-        if: failure() && env.SLACK_EVAL_WEBHOOK != ''
-        env:
-          SLACK_EVAL_WEBHOOK: ${{ secrets.SLACK_EVAL_WEBHOOK }}
-        run: |
-          curl -sS -X POST -H 'Content-Type: application/json' \
-            -d "{\"text\":\":rotating_light: TESSAR nightly evals FAILED. Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}" \
-            "$SLACK_EVAL_WEBHOOK"
