@@ -1,0 +1,125 @@
+{
+  "_comment": "Fixture for scenario 006 — single-engineer internal HR onboarding tool.",
+  "id": "fixture-006",
+  "generatedAt": "2026-05-17T12:00:00Z",
+  "kbSnapshotId": "kb-fixture",
+  "brief": "Internal HR onboarding workflow for 300-person SaaS; 60 hires/year; 1 maintainer.",
+  "requirements": [
+    { "id": "r1", "label": "Scale", "value": "60 hires/year", "source": "brief" },
+    { "id": "r2", "label": "Maintainer", "value": "1 full-stack engineer", "source": "brief" },
+    { "id": "r3", "label": "Auth", "value": "Google Workspace SSO", "source": "brief" },
+    {
+      "id": "r4",
+      "label": "Connectors",
+      "value": "Google + GitHub + Slack + Notion + 1Password",
+      "source": "brief"
+    }
+  ],
+  "nodes": [
+    { "id": "web", "label": "Cloud Run (Next.js)", "cite": 1 },
+    { "id": "db", "label": "Cloud SQL Postgres (small)", "cite": 2 },
+    { "id": "wf", "label": "Inngest (workflow engine)", "cite": 3 },
+    { "id": "sign", "label": "Dropbox Sign", "cite": 4 },
+    { "id": "files", "label": "Cloud Storage", "cite": 5 }
+  ],
+  "decisions": [
+    {
+      "id": "d1",
+      "topic": "App runtime",
+      "pick": "Cloud Run",
+      "vs": "vs Render · Fly.io",
+      "why": "scale-to-zero kills the cost floor; one-person ops",
+      "conf": "high",
+      "cite": 1,
+      "reversibility": "2-way",
+      "blastRadius": "compute",
+      "revisitAt": "if SaaS adds 2nd region"
+    },
+    {
+      "id": "d2",
+      "topic": "Workflow engine",
+      "pick": "Inngest",
+      "vs": "vs Temporal · Trigger.dev · Hatchet",
+      "why": "step-functions DX without running your own workers; free tier covers 60/yr",
+      "conf": "high",
+      "cite": 3,
+      "reversibility": "2-way",
+      "blastRadius": "platform",
+      "revisitAt": "if step volume exceeds 10k/month"
+    },
+    {
+      "id": "d3",
+      "topic": "E-signature",
+      "pick": "Dropbox Sign",
+      "vs": "vs DocuSign · PandaDoc",
+      "why": "API-first, simpler than DocuSign for 60/yr volume",
+      "conf": "med",
+      "cite": 4,
+      "reversibility": "2-way",
+      "blastRadius": "platform",
+      "revisitAt": "if legal team wants specific DocuSign features"
+    }
+  ],
+  "bom": [
+    { "id": "b1", "name": "Cloud Run", "kind": "compute", "baseCost": 15.0, "cite": 1 },
+    { "id": "b2", "name": "Cloud SQL Postgres", "kind": "data", "baseCost": 40.0, "cite": 2 },
+    { "id": "b3", "name": "Inngest", "kind": "vendor", "baseCost": 0.0, "cite": 3 },
+    { "id": "b4", "name": "Dropbox Sign", "kind": "vendor", "baseCost": 30.0, "cite": 4 },
+    { "id": "b5", "name": "Cloud Storage", "kind": "storage", "baseCost": 5.0, "cite": 5 }
+  ],
+  "risks": [
+    {
+      "id": "k1",
+      "title": "Key-person dependency on one engineer",
+      "severity": "high",
+      "likelihood": "med",
+      "mitigation": "all infra in Terraform; runbook for People Ops to disable workflows; manager-of-1 succession doc",
+      "cite": 1
+    },
+    {
+      "id": "k2",
+      "title": "OAuth-token revocation breaks provisioning silently",
+      "severity": "med",
+      "likelihood": "med",
+      "mitigation": "weekly health-check job that exercises each connector; Slack alert on revoke",
+      "cite": 3
+    }
+  ],
+  "sources": [
+    {
+      "id": 1,
+      "title": "Cloud Run docs",
+      "publisher": "GCP",
+      "url": "https://cloud.google.com/run/docs",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 2,
+      "title": "Cloud SQL Postgres pricing",
+      "publisher": "GCP",
+      "url": "https://cloud.google.com/sql/pricing",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 3,
+      "title": "Inngest pricing",
+      "publisher": "Inngest",
+      "url": "https://www.inngest.com/pricing",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 4,
+      "title": "Dropbox Sign API pricing",
+      "publisher": "Dropbox",
+      "url": "https://www.hellosign.com/products/api/pricing",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 5,
+      "title": "Cloud Storage pricing",
+      "publisher": "GCP",
+      "url": "https://cloud.google.com/storage/pricing",
+      "verifiedAt": "2026-05-01"
+    }
+  ]
+}

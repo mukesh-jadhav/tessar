@@ -1,0 +1,141 @@
+{
+  "_comment": "Hand-crafted RunPackage fixture for scenario 004-devtool-feature-flags. Edge-evaluated flag SaaS shape. Cite-coverage = 100%.",
+  "id": "fixture-004",
+  "generatedAt": "2026-05-17T12:00:00Z",
+  "kbSnapshotId": "kb-fixture",
+  "brief": "Edge-evaluated feature-flag SaaS with SDK clients; GDPR/EU residency; SOC-2 within 12 months.",
+  "requirements": [
+    { "id": "r1", "label": "Edge p95 latency", "value": "< 50ms global", "source": "brief" },
+    { "id": "r2", "label": "SDKs", "value": "JS + iOS + Android", "source": "brief" },
+    { "id": "r3", "label": "Residency", "value": "EU option (GDPR)", "source": "brief" },
+    { "id": "r4", "label": "Tenants", "value": "100 in year 1", "source": "brief" }
+  ],
+  "nodes": [
+    { "id": "edge", "label": "Cloudflare Workers (flag eval)", "cite": 1 },
+    { "id": "kv", "label": "Workers KV (rule store)", "cite": 1 },
+    { "id": "ingest", "label": "Pub/Sub (assignment events)", "cite": 2 },
+    { "id": "warehouse", "label": "ClickHouse Cloud", "cite": 3 },
+    { "id": "admin", "label": "Cloud Run (admin console)", "cite": 4 },
+    { "id": "auth", "label": "WorkOS (SSO)", "cite": 5 }
+  ],
+  "decisions": [
+    {
+      "id": "d1",
+      "topic": "Flag evaluation runtime",
+      "pick": "Cloudflare Workers",
+      "vs": "vs Vercel Edge · Fastly Compute",
+      "why": "globally distributed PoPs hit <50ms p95 from launch",
+      "conf": "high",
+      "cite": 1,
+      "reversibility": "1-way",
+      "blastRadius": "platform",
+      "revisitAt": "if PoP coverage gaps in target markets surface"
+    },
+    {
+      "id": "d2",
+      "topic": "Assignment event store",
+      "pick": "ClickHouse Cloud",
+      "vs": "vs BigQuery · Snowflake",
+      "why": "interactive analytics on 100M+ rows/day at predictable cost",
+      "conf": "high",
+      "cite": 3,
+      "reversibility": "1-way",
+      "blastRadius": "data",
+      "revisitAt": "if cross-tenant query patterns dominate"
+    },
+    {
+      "id": "d3",
+      "topic": "Event ingestion",
+      "pick": "Pub/Sub",
+      "vs": "vs Kafka · Kinesis",
+      "why": "managed, no SRE overhead, integrates with Cloud Run",
+      "conf": "med",
+      "cite": 2,
+      "reversibility": "2-way",
+      "blastRadius": "queue",
+      "revisitAt": "if multi-cloud ingest required"
+    },
+    {
+      "id": "d4",
+      "topic": "Identity",
+      "pick": "WorkOS",
+      "vs": "vs Auth.js + custom SAML · Clerk",
+      "why": "SAML/OIDC out of the box for B2B SSO requirement",
+      "conf": "high",
+      "cite": 5,
+      "reversibility": "2-way",
+      "blastRadius": "platform",
+      "revisitAt": "if SAML setup volume falls below 10/quarter"
+    }
+  ],
+  "bom": [
+    { "id": "b1", "name": "Cloudflare Workers", "kind": "compute", "baseCost": 200.0, "cite": 1 },
+    { "id": "b2", "name": "Pub/Sub", "kind": "network", "baseCost": 80.0, "cite": 2 },
+    { "id": "b3", "name": "ClickHouse Cloud", "kind": "data", "baseCost": 600.0, "cite": 3 },
+    { "id": "b4", "name": "Cloud Run", "kind": "compute", "baseCost": 50.0, "cite": 4 },
+    { "id": "b5", "name": "WorkOS", "kind": "vendor", "baseCost": 125.0, "cite": 5 }
+  ],
+  "risks": [
+    {
+      "id": "k1",
+      "title": "Edge cold-start variance hurts p95 SLO",
+      "severity": "med",
+      "likelihood": "med",
+      "mitigation": "pin payload <50KB; pre-warm via cron; reject rule sets above 5MB",
+      "cite": 1
+    },
+    {
+      "id": "k2",
+      "title": "EU residency leakage via assignment-event ingestion",
+      "severity": "high",
+      "likelihood": "low",
+      "mitigation": "deploy a region-pinned ingest path per tenant flag; reject cross-region replication",
+      "cite": 2
+    },
+    {
+      "id": "k3",
+      "title": "Cross-tenant analytics query leak",
+      "severity": "high",
+      "likelihood": "low",
+      "mitigation": "tenant_id row-policy enforced at ClickHouse layer plus app-level filter",
+      "cite": 3
+    }
+  ],
+  "sources": [
+    {
+      "id": 1,
+      "title": "Cloudflare Workers limits & latency",
+      "publisher": "Cloudflare",
+      "url": "https://developers.cloudflare.com/workers/platform/limits/",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 2,
+      "title": "Pub/Sub pricing",
+      "publisher": "GCP",
+      "url": "https://cloud.google.com/pubsub/pricing",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 3,
+      "title": "ClickHouse Cloud pricing",
+      "publisher": "ClickHouse",
+      "url": "https://clickhouse.com/pricing",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 4,
+      "title": "Cloud Run docs",
+      "publisher": "GCP",
+      "url": "https://cloud.google.com/run/docs",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 5,
+      "title": "WorkOS pricing",
+      "publisher": "WorkOS",
+      "url": "https://workos.com/pricing",
+      "verifiedAt": "2026-05-01"
+    }
+  ]
+}

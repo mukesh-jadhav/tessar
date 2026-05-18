@@ -1,0 +1,173 @@
+{
+  "_comment": "Fixture for scenario 008 — Indian SMB invoicing + bank reconciliation with AA framework.",
+  "id": "fixture-008",
+  "generatedAt": "2026-05-17T12:00:00Z",
+  "kbSnapshotId": "kb-fixture",
+  "brief": "Invoicing + bank reconciliation SaaS for Indian SMBs. UPI/cards, GSTN e-invoice, AA bank feeds, 8-yr retention.",
+  "requirements": [
+    { "id": "r1", "label": "Region", "value": "asia-south1 primary", "source": "brief" },
+    {
+      "id": "r2",
+      "label": "Payments",
+      "value": "UPI + cards via Razorpay/Cashfree",
+      "source": "brief"
+    },
+    {
+      "id": "r3",
+      "label": "Bank feed",
+      "value": "Account Aggregator (Setu/Finbox)",
+      "source": "brief"
+    },
+    {
+      "id": "r4",
+      "label": "GST",
+      "value": "GSTN e-invoicing above ₹5cr turnover",
+      "source": "brief"
+    },
+    {
+      "id": "r5",
+      "label": "Retention",
+      "value": "8-year financial-record retention",
+      "source": "brief"
+    }
+  ],
+  "nodes": [
+    { "id": "app", "label": "Cloud Run (asia-south1)", "cite": 1 },
+    { "id": "db", "label": "Cloud SQL Postgres", "cite": 2 },
+    { "id": "pay", "label": "Razorpay (UPI + cards)", "cite": 3 },
+    { "id": "aa", "label": "Setu (Account Aggregator)", "cite": 4 },
+    { "id": "gst", "label": "ClearTax e-invoice APIs", "cite": 5 },
+    { "id": "wa", "label": "Meta WhatsApp Cloud API", "cite": 6 },
+    { "id": "cold", "label": "Cloud Storage Coldline (8-yr archive)", "cite": 7 }
+  ],
+  "decisions": [
+    {
+      "id": "d1",
+      "topic": "Payment gateway",
+      "pick": "Razorpay (Cashfree as fallback)",
+      "vs": "vs custom gateway · Stripe-only",
+      "why": "best UPI success rate in India; INR settlement; e-invoice plugins",
+      "conf": "high",
+      "cite": 3,
+      "reversibility": "2-way",
+      "blastRadius": "platform",
+      "revisitAt": "if international expansion requires multi-currency"
+    },
+    {
+      "id": "d2",
+      "topic": "Bank feed source",
+      "pick": "Account Aggregator (Setu)",
+      "vs": "vs scraping bank portals · direct bank APIs",
+      "why": "RBI-licensed AA framework is the only compliant path; Setu has India market coverage",
+      "conf": "high",
+      "cite": 4,
+      "reversibility": "2-way",
+      "blastRadius": "platform",
+      "revisitAt": "if a bank's coverage gap appears in customer NPS data"
+    },
+    {
+      "id": "d3",
+      "topic": "Long-term financial archive",
+      "pick": "Cloud Storage Coldline",
+      "vs": "vs Standard · S3 Glacier Deep Archive",
+      "why": "regulatory 8-year retention; access < 1/yr per object after year-1; in-region",
+      "conf": "high",
+      "cite": 7,
+      "reversibility": "2-way",
+      "blastRadius": "data",
+      "revisitAt": "if accountant tooling pulls archived records frequently"
+    }
+  ],
+  "bom": [
+    { "id": "b1", "name": "Cloud Run", "kind": "compute", "baseCost": 50.0, "cite": 1 },
+    { "id": "b2", "name": "Cloud SQL Postgres", "kind": "data", "baseCost": 80.0, "cite": 2 },
+    { "id": "b3", "name": "Razorpay", "kind": "vendor", "baseCost": 0.0, "cite": 3 },
+    {
+      "id": "b4",
+      "name": "Setu AA consent + data calls",
+      "kind": "vendor",
+      "baseCost": 200.0,
+      "cite": 4
+    },
+    { "id": "b5", "name": "ClearTax e-invoice", "kind": "vendor", "baseCost": 150.0, "cite": 5 },
+    { "id": "b6", "name": "WhatsApp Cloud API", "kind": "vendor", "baseCost": 90.0, "cite": 6 },
+    { "id": "b7", "name": "Cloud Storage Coldline", "kind": "storage", "baseCost": 25.0, "cite": 7 }
+  ],
+  "risks": [
+    {
+      "id": "k1",
+      "title": "GSTN sandbox-vs-prod drift breaks e-invoicing at launch",
+      "severity": "high",
+      "likelihood": "med",
+      "mitigation": "ClearTax wrapper abstracts sandbox/prod; canary test before each fiscal quarter; weekly automated probe",
+      "cite": 5
+    },
+    {
+      "id": "k2",
+      "title": "AA consent revocation breaks reconciliation silently",
+      "severity": "med",
+      "likelihood": "high",
+      "mitigation": "consent-renewal reminder 7 days before expiry; degrade to manual statement upload UX",
+      "cite": 4
+    },
+    {
+      "id": "k3",
+      "title": "PII leak through WhatsApp message templates",
+      "severity": "med",
+      "likelihood": "med",
+      "mitigation": "approved templates only; redact GSTIN / account-number from variables; periodic review",
+      "cite": 6
+    }
+  ],
+  "sources": [
+    {
+      "id": 1,
+      "title": "Cloud Run asia-south1",
+      "publisher": "GCP",
+      "url": "https://cloud.google.com/run/docs/locations",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 2,
+      "title": "Cloud SQL Postgres pricing",
+      "publisher": "GCP",
+      "url": "https://cloud.google.com/sql/pricing",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 3,
+      "title": "Razorpay pricing + UPI",
+      "publisher": "Razorpay",
+      "url": "https://razorpay.com/pricing/",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 4,
+      "title": "Setu Account Aggregator docs",
+      "publisher": "Setu",
+      "url": "https://docs.setu.co/data/account-aggregator",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 5,
+      "title": "ClearTax e-invoicing APIs",
+      "publisher": "ClearTax",
+      "url": "https://cleartax.in/s/e-invoicing-software",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 6,
+      "title": "WhatsApp Business Cloud API pricing",
+      "publisher": "Meta",
+      "url": "https://developers.facebook.com/docs/whatsapp/pricing",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 7,
+      "title": "Cloud Storage Coldline pricing",
+      "publisher": "GCP",
+      "url": "https://cloud.google.com/storage/pricing",
+      "verifiedAt": "2026-05-01"
+    }
+  ]
+}

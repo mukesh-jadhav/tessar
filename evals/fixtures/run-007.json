@@ -1,0 +1,143 @@
+{
+  "_comment": "Fixture for scenario 007 — multi-tenant product analytics SaaS at 500M events/day.",
+  "id": "fixture-007",
+  "generatedAt": "2026-05-17T12:00:00Z",
+  "kbSnapshotId": "kb-fixture",
+  "brief": "Multi-tenant product-analytics SaaS, 50 tenants, ~500M events/day, p95 funnel < 5s, SOC-2 in 12mo.",
+  "requirements": [
+    {
+      "id": "r1",
+      "label": "Ingest rate",
+      "value": "~6k events/sec sustained, 20k peak",
+      "source": "brief"
+    },
+    { "id": "r2", "label": "Query SLO", "value": "p95 < 5s funnels", "source": "brief" },
+    { "id": "r3", "label": "Isolation", "value": "strict per-tenant", "source": "brief" },
+    { "id": "r4", "label": "Compliance", "value": "SOC-2 Type II in 12 months", "source": "brief" },
+    { "id": "r5", "label": "Retention", "value": "13 months hot", "source": "brief" }
+  ],
+  "nodes": [
+    { "id": "edge", "label": "Cloud Run (SDK ingest API)", "cite": 1 },
+    { "id": "bus", "label": "Pub/Sub", "cite": 2 },
+    { "id": "olap", "label": "ClickHouse Cloud", "cite": 3 },
+    { "id": "meta", "label": "Cloud SQL Postgres (tenant metadata)", "cite": 4 },
+    { "id": "cache", "label": "Memorystore Redis", "cite": 5 },
+    { "id": "obs", "label": "Grafana Cloud", "cite": 6 }
+  ],
+  "decisions": [
+    {
+      "id": "d1",
+      "topic": "Event store",
+      "pick": "ClickHouse Cloud",
+      "vs": "vs BigQuery · Snowflake · Druid",
+      "why": "interactive funnel/retention queries on 500M/day at predictable cost; tenant_id row-policy for isolation",
+      "conf": "high",
+      "cite": 3,
+      "reversibility": "1-way",
+      "blastRadius": "data",
+      "revisitAt": "if ad-hoc SQL workloads from customers dominate"
+    },
+    {
+      "id": "d2",
+      "topic": "Ingest bus",
+      "pick": "Pub/Sub",
+      "vs": "vs Kinesis · Kafka",
+      "why": "absorbs spiky tenant traffic; zero SRE overhead for 8-person team",
+      "conf": "high",
+      "cite": 2,
+      "reversibility": "2-way",
+      "blastRadius": "queue",
+      "revisitAt": "if multi-cloud ingest required"
+    },
+    {
+      "id": "d3",
+      "topic": "Tenant isolation model",
+      "pick": "Shared cluster + row-policy on tenant_id",
+      "vs": "vs per-tenant ClickHouse cluster",
+      "why": "50 tenants makes per-tenant clusters cost-prohibitive; row-policy + app-level filter is enough at this volume",
+      "conf": "med",
+      "cite": 3,
+      "reversibility": "1-way",
+      "blastRadius": "data",
+      "revisitAt": "when any single tenant exceeds 30% of cluster QPS"
+    }
+  ],
+  "bom": [
+    { "id": "b1", "name": "Cloud Run", "kind": "compute", "baseCost": 400.0, "cite": 1 },
+    { "id": "b2", "name": "Pub/Sub", "kind": "network", "baseCost": 1200.0, "cite": 2 },
+    { "id": "b3", "name": "ClickHouse Cloud", "kind": "data", "baseCost": 8500.0, "cite": 3 },
+    { "id": "b4", "name": "Cloud SQL Postgres", "kind": "data", "baseCost": 150.0, "cite": 4 },
+    { "id": "b5", "name": "Memorystore Redis", "kind": "data", "baseCost": 250.0, "cite": 5 },
+    { "id": "b6", "name": "Grafana Cloud", "kind": "vendor", "baseCost": 300.0, "cite": 6 }
+  ],
+  "risks": [
+    {
+      "id": "k1",
+      "title": "Cross-tenant query leak via misconfigured row-policy",
+      "severity": "high",
+      "likelihood": "low",
+      "mitigation": "row-policy enforced at cluster + app-level tenant_id filter + integration test per query type",
+      "cite": 3
+    },
+    {
+      "id": "k2",
+      "title": "Spiky tenant ingest causes head-of-line blocking",
+      "severity": "med",
+      "likelihood": "med",
+      "mitigation": "per-tenant subscription with flow control; quarantine top-1% on burst budget breach",
+      "cite": 2
+    },
+    {
+      "id": "k3",
+      "title": "Per-tenant cost attribution drifts",
+      "severity": "med",
+      "likelihood": "med",
+      "mitigation": "tag every BQ/CH query + Pub/Sub topic with tenant_id; daily billing-export job aggregates by tag",
+      "cite": 6
+    }
+  ],
+  "sources": [
+    {
+      "id": 1,
+      "title": "Cloud Run docs",
+      "publisher": "GCP",
+      "url": "https://cloud.google.com/run/docs",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 2,
+      "title": "Pub/Sub pricing",
+      "publisher": "GCP",
+      "url": "https://cloud.google.com/pubsub/pricing",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 3,
+      "title": "ClickHouse Cloud row-policy + pricing",
+      "publisher": "ClickHouse",
+      "url": "https://clickhouse.com/docs/en/cloud/reference/billing",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 4,
+      "title": "Cloud SQL Postgres pricing",
+      "publisher": "GCP",
+      "url": "https://cloud.google.com/sql/pricing",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 5,
+      "title": "Memorystore Redis pricing",
+      "publisher": "GCP",
+      "url": "https://cloud.google.com/memorystore/docs/redis/pricing",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 6,
+      "title": "Grafana Cloud pricing",
+      "publisher": "Grafana Labs",
+      "url": "https://grafana.com/pricing/",
+      "verifiedAt": "2026-05-01"
+    }
+  ]
+}

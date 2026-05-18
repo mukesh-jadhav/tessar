@@ -1,0 +1,142 @@
+{
+  "_comment": "Fixture for scenario 005 — live tutoring platform, India + SE Asia, low-bandwidth video, INR subscriptions.",
+  "id": "fixture-005",
+  "generatedAt": "2026-05-17T12:00:00Z",
+  "kbSnapshotId": "kb-fixture",
+  "brief": "Live small-group K-12 tutoring (6 students/session) in India + SE Asia; mobile-first Android; UPI autopay.",
+  "requirements": [
+    { "id": "r1", "label": "Region", "value": "asia-south1 primary", "source": "brief" },
+    { "id": "r2", "label": "Video", "value": "managed WebRTC SFU", "source": "brief" },
+    {
+      "id": "r3",
+      "label": "Billing",
+      "value": "INR subscriptions + UPI autopay",
+      "source": "brief"
+    },
+    { "id": "r4", "label": "Recordings", "value": "90-day retention", "source": "brief" }
+  ],
+  "nodes": [
+    { "id": "video", "label": "100ms (WebRTC SFU)", "cite": 1 },
+    { "id": "whiteboard", "label": "Liveblocks (realtime collab)", "cite": 2 },
+    { "id": "app", "label": "Cloud Run (asia-south1)", "cite": 3 },
+    { "id": "db", "label": "Cloud SQL Postgres", "cite": 4 },
+    { "id": "pay", "label": "Razorpay Subscriptions", "cite": 5 },
+    { "id": "rec", "label": "Cloud Storage Nearline", "cite": 6 }
+  ],
+  "decisions": [
+    {
+      "id": "d1",
+      "topic": "Video stack",
+      "pick": "100ms",
+      "vs": "vs Daily.co · Agora · LiveKit Cloud",
+      "why": "India-headquartered, asia-south1 PoPs, low-bandwidth profile docs",
+      "conf": "high",
+      "cite": 1,
+      "reversibility": "2-way",
+      "blastRadius": "platform",
+      "revisitAt": "if expansion to LATAM/Africa shifts coverage need"
+    },
+    {
+      "id": "d2",
+      "topic": "Recurring billing",
+      "pick": "Razorpay Subscriptions",
+      "vs": "vs Cashfree · Juspay",
+      "why": "UPI autopay (e-mandate) is first-class; INR settlement",
+      "conf": "high",
+      "cite": 5,
+      "reversibility": "2-way",
+      "blastRadius": "platform",
+      "revisitAt": "if non-INR billing required for SEA expansion"
+    },
+    {
+      "id": "d3",
+      "topic": "Recording retention store",
+      "pick": "Cloud Storage Nearline",
+      "vs": "vs Standard · Coldline",
+      "why": "90-day access pattern + < 1 read/object/month",
+      "conf": "med",
+      "cite": 6,
+      "reversibility": "2-way",
+      "blastRadius": "data",
+      "revisitAt": "if parent re-watch traffic exceeds 1 read/object/month"
+    }
+  ],
+  "bom": [
+    { "id": "b1", "name": "100ms", "kind": "vendor", "baseCost": 700.0, "cite": 1 },
+    { "id": "b2", "name": "Liveblocks", "kind": "vendor", "baseCost": 120.0, "cite": 2 },
+    { "id": "b3", "name": "Cloud Run", "kind": "compute", "baseCost": 90.0, "cite": 3 },
+    { "id": "b4", "name": "Cloud SQL Postgres", "kind": "data", "baseCost": 110.0, "cite": 4 },
+    { "id": "b5", "name": "Razorpay", "kind": "vendor", "baseCost": 60.0, "cite": 5 },
+    { "id": "b6", "name": "Cloud Storage Nearline", "kind": "storage", "baseCost": 80.0, "cite": 6 }
+  ],
+  "risks": [
+    {
+      "id": "k1",
+      "title": "Dropped calls on 3G/4G handoff degrade core experience",
+      "severity": "high",
+      "likelihood": "high",
+      "mitigation": "auto-reconnect SDK; offline whiteboard cache; tutor-side recording for re-share",
+      "cite": 1
+    },
+    {
+      "id": "k2",
+      "title": "UPI autopay e-mandate failures cause silent churn",
+      "severity": "med",
+      "likelihood": "med",
+      "mitigation": "monitor mandate state; in-app retry + parent SMS reminder + manual recovery flow",
+      "cite": 5
+    },
+    {
+      "id": "k3",
+      "title": "Recording-access misuse (parent shares link externally)",
+      "severity": "med",
+      "likelihood": "med",
+      "mitigation": "signed URLs with 24-hour TTL; per-account watermark on playback",
+      "cite": 6
+    }
+  ],
+  "sources": [
+    {
+      "id": 1,
+      "title": "100ms pricing + region coverage",
+      "publisher": "100ms",
+      "url": "https://www.100ms.live/pricing",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 2,
+      "title": "Liveblocks pricing",
+      "publisher": "Liveblocks",
+      "url": "https://liveblocks.io/pricing",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 3,
+      "title": "Cloud Run asia-south1 availability",
+      "publisher": "GCP",
+      "url": "https://cloud.google.com/run/docs/locations",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 4,
+      "title": "Cloud SQL Postgres pricing",
+      "publisher": "GCP",
+      "url": "https://cloud.google.com/sql/pricing",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 5,
+      "title": "Razorpay Subscriptions docs",
+      "publisher": "Razorpay",
+      "url": "https://razorpay.com/docs/payments/subscriptions/",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 6,
+      "title": "Cloud Storage Nearline pricing",
+      "publisher": "GCP",
+      "url": "https://cloud.google.com/storage/pricing",
+      "verifiedAt": "2026-05-01"
+    }
+  ]
+}

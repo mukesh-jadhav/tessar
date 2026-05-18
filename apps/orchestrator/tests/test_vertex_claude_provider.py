@@ -22,7 +22,6 @@ from tessar.llm.providers.vertex_claude import (
 )
 from tessar.llm.types import LlmMessage, Tier
 
-
 # ─── supports() ──────────────────────────────────────────────────
 
 
@@ -100,13 +99,13 @@ def test_classify_transient_by_name() -> None:
     """Connection / timeout / rate-limit errors must be transient so the
     router falls through to Gemini."""
 
-    class APIConnectionError(Exception):  # noqa: N818
+    class APIConnectionError(Exception):
         pass
 
-    class APITimeoutError(Exception):  # noqa: N818
+    class APITimeoutError(Exception):
         pass
 
-    class OverloadedError(Exception):  # noqa: N818
+    class OverloadedError(Exception):
         pass
 
     assert _classify_error(APIConnectionError("network")) is True
@@ -118,7 +117,7 @@ def test_classify_status_error_discriminates_by_status() -> None:
     """4xx auth/validation must NOT be retried (would waste budget on a
     deterministic failure). 5xx + 429 must be retried."""
 
-    class APIStatusError(Exception):  # noqa: N818
+    class APIStatusError(Exception):
         def __init__(self, status_code: int) -> None:
             self.status_code = status_code
 
@@ -222,7 +221,7 @@ def test_generate_transient_error_becomes_transient_provider_error() -> None:
     """An SDK-level 503 must surface as TransientProviderError so the
     router falls through to Gemini."""
 
-    class APIStatusError(Exception):  # noqa: N818
+    class APIStatusError(Exception):
         def __init__(self, msg: str, status_code: int) -> None:
             super().__init__(msg)
             self.status_code = status_code
@@ -278,8 +277,8 @@ def test_factory_chain_order_when_vertex_project_set(monkeypatch: pytest.MonkeyP
 
     We assert on provider names rather than instances to keep the test
     independent of construction details."""
-    from tessar.llm import factory
     from tessar.config import settings
+    from tessar.llm import factory
 
     monkeypatch.setattr(settings, "vertex_project", "test-project")
 
@@ -299,12 +298,8 @@ def test_factory_chain_order_when_vertex_project_set(monkeypatch: pytest.MonkeyP
         raise RuntimeError("sdk-missing-in-test")
 
     with (
-        patch(
-            "tessar.llm.providers.vertex_claude.VertexClaudeProvider", side_effect=fake_claude
-        ),
-        patch(
-            "tessar.llm.providers.vertex_gemini.VertexGeminiProvider", side_effect=fake_gemini
-        ),
+        patch("tessar.llm.providers.vertex_claude.VertexClaudeProvider", side_effect=fake_claude),
+        patch("tessar.llm.providers.vertex_gemini.VertexGeminiProvider", side_effect=fake_gemini),
     ):
         chain = factory._build_provider_chain()
 

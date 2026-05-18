@@ -27,7 +27,6 @@ from tessar.llm.cache import (
 from tessar.llm.providers.mock import MockLlmProvider
 from tessar.llm.types import LlmResponse, LlmUsage
 
-
 # ─── helpers ─────────────────────────────────────────────────────
 
 
@@ -120,9 +119,9 @@ def test_cache_key_rounds_temperature_to_3dp() -> None:
         max_tokens=512,
         kb_snapshot_id="kb-1",
     )
-    assert build_cache_key(
-        [_msg("x")], temperature=0.2, **base
-    ) == build_cache_key([_msg("x")], temperature=0.20001, **base)
+    assert build_cache_key([_msg("x")], temperature=0.2, **base) == build_cache_key(
+        [_msg("x")], temperature=0.20001, **base
+    )
 
 
 def test_cache_key_changes_on_max_tokens_change() -> None:
@@ -367,14 +366,10 @@ def test_router_without_cache_works_as_before() -> None:
     """Backwards compat — omitting cache must keep the router behaving
     exactly as it did before this commit."""
     provider = MockLlmProvider()
-    router = LlmRouter(
-        [provider], BudgetTracker(cap_usd=1.0, cap_tokens=10_000)
-    )
+    router = LlmRouter([provider], BudgetTracker(cap_usd=1.0, cap_tokens=10_000))
     r1 = router.generate([_msg("noop")], agent_name="synthesizer", max_tokens=64)
     r2 = router.generate([_msg("noop")], agent_name="synthesizer", max_tokens=64)
     # No cache → both calls bill the provider.
     assert r1.cache_hit is False
     assert r2.cache_hit is False
-    assert router.budget.state().spent_usd == pytest.approx(
-        r1.usage.cost_usd + r2.usage.cost_usd
-    )
+    assert router.budget.state().spent_usd == pytest.approx(r1.usage.cost_usd + r2.usage.cost_usd)

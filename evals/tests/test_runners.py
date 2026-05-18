@@ -11,7 +11,6 @@ from pathlib import Path
 
 import pytest
 from click.testing import CliRunner
-
 from runners.check_baseline import main as check_baseline_cli
 from runners.score_suite import _scenario_to_fixture
 from runners.score_suite import main as score_suite_cli

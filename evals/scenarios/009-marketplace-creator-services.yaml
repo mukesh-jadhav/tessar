@@ -1,0 +1,84 @@
+id: 009-marketplace-creator-services
+version: 1
+title: "Global marketplace for short-form-video creator services"
+domain: marketplace
+
+brief: |
+  Two-sided global marketplace where short-form-video creators (Reels /
+  Shorts / TikTok-style) buy services from each other: thumbnails, edits,
+  caption packs, ghostwriting, channel audits. Buyers are creators
+  worldwide; sellers are mostly in India, the Philippines, Pakistan,
+  Brazil, and Nigeria. Transactions are small ($5–$200) and fast (most
+  jobs deliver in 24-72 hours). Day-one regions: US/EU/SEA/LATAM.
+  Expected scale: 50k registered users in year 1; ~$200k GMV/month
+  steady state. Payouts must be cheap and global; pay-ins are mostly
+  US/EU cards. Trust is the load-bearing problem — fake portfolios,
+  payment fraud, work disputes.
+
+requirements:
+  must_have:
+    - "Global pay-in (cards, Apple Pay, Google Pay, SEPA, UPI for India buyers)"
+    - "Cross-border payouts to 50+ countries with low fees"
+    - "Escrow + milestone-based release"
+    - "KYC / KYB on sellers above a payout threshold"
+    - "In-app chat with shareable file attachments (drafts, revisions)"
+    - "Dispute workflow with admin tooling"
+  must_not:
+    - "Per-country PSP integrations done in-house" # absurd to integrate 30 PSPs
+    - "Building a custom KYC pipeline" # use an aggregator
+    - "Cash-out via crypto only" # legal/compliance footgun at this scale
+  nice_to_have:
+    - "AI portfolio-fraud detection (reverse-image search on samples)"
+    - "Multi-language search (EN/ES/PT/HI/ID at minimum)"
+    - "Subscription tier for high-volume buyers"
+
+expected_components:
+  payments_payin:
+    - "Stripe (global)"
+    - "Adyen"
+    - "Checkout.com"
+  payments_payout:
+    - "Stripe Connect Express"
+    - "Wise Platform"
+    - "Tipalti"
+    - "Payoneer"
+  kyc_kyb:
+    - "Persona"
+    - "Sumsub"
+    - "Onfido"
+  app_runtime:
+    - "Cloud Run"
+    - "Vercel + Cloud Run hybrid"
+    - "Render"
+  database:
+    - "Cloud SQL Postgres"
+    - "AlloyDB"
+    - "Neon"
+  chat:
+    - "Stream Chat"
+    - "SendBird"
+    - "Talk.js"
+  file_storage:
+    - "Cloud Storage (signed URLs)"
+    - "S3"
+    - "Bunny CDN storage"
+
+forbidden_components:
+  - "Building a KYC pipeline in-house"
+  - "Self-managed file delivery without CDN"
+  - "Stripe-only payouts" # Stripe Connect isn't supported in many target countries
+  - "Custom dispute-resolution model with no admin tooling"
+
+max_cost_usd: 0.55
+
+expected_brief_cost_usd_per_month:
+  min: 500
+  max: 3000
+
+notes: |
+  Tests global payments split (separate pay-in + pay-out vendors) and
+  KYC aggregation. Should NOT recommend Stripe Connect alone because
+  Stripe Connect Express is not available in many target seller
+  countries (Pakistan, Nigeria) — Wise/Payoneer/Tipalti for payouts is
+  the load-bearing constraint. Trust + dispute workflow should appear
+  as a top risk with a concrete admin-tool decision.

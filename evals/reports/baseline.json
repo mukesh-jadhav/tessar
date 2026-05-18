@@ -2,7 +2,7 @@
   "aggregate_score": 8.5,
   "pass_rate": 1.0,
   "suite_passed": true,
-  "n_scored": 1,
+  "n_scored": 8,
   "n_skipped": 2,
   "skipped_ids": ["002-fintech-realtime-feed", "003-marketplace-mvp"],
   "failure_reasons": [],
@@ -26,7 +26,192 @@
         "cost_realism": {
           "axis": "cost_realism",
           "score": 10.0,
-          "findings": ["3/3 BOM lines within \u00b150% of KB (1 unmapped, ignored)."]
+          "findings": [
+            "no KB cost map provided \u2014 skipping check (returning 10/10).",
+            "this axis becomes load-bearing once Phase 3.1 KB seed lands."
+          ]
+        }
+      }
+    },
+    {
+      "scenario_id": "004-devtool-feature-flags",
+      "weighted_score": 8.5,
+      "passed": true,
+      "failure_reasons": [],
+      "axes": {
+        "groundedness": {
+          "axis": "groundedness",
+          "score": 10.0,
+          "findings": ["all 18 picks cited a real source."]
+        },
+        "schema_validity": {
+          "axis": "schema_validity",
+          "score": 10.0,
+          "findings": ["package parses against the locked subset of `RunPackage`."]
+        },
+        "cost_realism": {
+          "axis": "cost_realism",
+          "score": 10.0,
+          "findings": [
+            "no KB cost map provided \u2014 skipping check (returning 10/10).",
+            "this axis becomes load-bearing once Phase 3.1 KB seed lands."
+          ]
+        }
+      }
+    },
+    {
+      "scenario_id": "005-b2c-edtech-live-classes",
+      "weighted_score": 8.5,
+      "passed": true,
+      "failure_reasons": [],
+      "axes": {
+        "groundedness": {
+          "axis": "groundedness",
+          "score": 10.0,
+          "findings": ["all 18 picks cited a real source."]
+        },
+        "schema_validity": {
+          "axis": "schema_validity",
+          "score": 10.0,
+          "findings": ["package parses against the locked subset of `RunPackage`."]
+        },
+        "cost_realism": {
+          "axis": "cost_realism",
+          "score": 10.0,
+          "findings": [
+            "no KB cost map provided \u2014 skipping check (returning 10/10).",
+            "this axis becomes load-bearing once Phase 3.1 KB seed lands."
+          ]
+        }
+      }
+    },
+    {
+      "scenario_id": "006-internal-hr-onboarding",
+      "weighted_score": 8.5,
+      "passed": true,
+      "failure_reasons": [],
+      "axes": {
+        "groundedness": {
+          "axis": "groundedness",
+          "score": 10.0,
+          "findings": ["all 15 picks cited a real source."]
+        },
+        "schema_validity": {
+          "axis": "schema_validity",
+          "score": 10.0,
+          "findings": ["package parses against the locked subset of `RunPackage`."]
+        },
+        "cost_realism": {
+          "axis": "cost_realism",
+          "score": 10.0,
+          "findings": [
+            "no KB cost map provided \u2014 skipping check (returning 10/10).",
+            "this axis becomes load-bearing once Phase 3.1 KB seed lands."
+          ]
+        }
+      }
+    },
+    {
+      "scenario_id": "007-b2b-analytics-multitenant",
+      "weighted_score": 8.5,
+      "passed": true,
+      "failure_reasons": [],
+      "axes": {
+        "groundedness": {
+          "axis": "groundedness",
+          "score": 10.0,
+          "findings": ["all 18 picks cited a real source."]
+        },
+        "schema_validity": {
+          "axis": "schema_validity",
+          "score": 10.0,
+          "findings": ["package parses against the locked subset of `RunPackage`."]
+        },
+        "cost_realism": {
+          "axis": "cost_realism",
+          "score": 10.0,
+          "findings": [
+            "no KB cost map provided \u2014 skipping check (returning 10/10).",
+            "this axis becomes load-bearing once Phase 3.1 KB seed lands."
+          ]
+        }
+      }
+    },
+    {
+      "scenario_id": "008-fintech-smb-invoicing",
+      "weighted_score": 8.5,
+      "passed": true,
+      "failure_reasons": [],
+      "axes": {
+        "groundedness": {
+          "axis": "groundedness",
+          "score": 10.0,
+          "findings": ["all 20 picks cited a real source."]
+        },
+        "schema_validity": {
+          "axis": "schema_validity",
+          "score": 10.0,
+          "findings": ["package parses against the locked subset of `RunPackage`."]
+        },
+        "cost_realism": {
+          "axis": "cost_realism",
+          "score": 10.0,
+          "findings": [
+            "no KB cost map provided \u2014 skipping check (returning 10/10).",
+            "this axis becomes load-bearing once Phase 3.1 KB seed lands."
+          ]
+        }
+      }
+    },
+    {
+      "scenario_id": "009-marketplace-creator-services",
+      "weighted_score": 8.5,
+      "passed": true,
+      "failure_reasons": [],
+      "axes": {
+        "groundedness": {
+          "axis": "groundedness",
+          "score": 10.0,
+          "findings": ["all 20 picks cited a real source."]
+        },
+        "schema_validity": {
+          "axis": "schema_validity",
+          "score": 10.0,
+          "findings": ["package parses against the locked subset of `RunPackage`."]
+        },
+        "cost_realism": {
+          "axis": "cost_realism",
+          "score": 10.0,
+          "findings": [
+            "no KB cost map provided \u2014 skipping check (returning 10/10).",
+            "this axis becomes load-bearing once Phase 3.1 KB seed lands."
+          ]
+        }
+      }
+    },
+    {
+      "scenario_id": "010-b2b-event-webhooks",
+      "weighted_score": 8.5,
+      "passed": true,
+      "failure_reasons": [],
+      "axes": {
+        "groundedness": {
+          "axis": "groundedness",
+          "score": 10.0,
+          "findings": ["all 17 picks cited a real source."]
+        },
+        "schema_validity": {
+          "axis": "schema_validity",
+          "score": 10.0,
+          "findings": ["package parses against the locked subset of `RunPackage`."]
+        },
+        "cost_realism": {
+          "axis": "cost_realism",
+          "score": 10.0,
+          "findings": [
+            "no KB cost map provided \u2014 skipping check (returning 10/10).",
+            "this axis becomes load-bearing once Phase 3.1 KB seed lands."
+          ]
         }
       }
     }

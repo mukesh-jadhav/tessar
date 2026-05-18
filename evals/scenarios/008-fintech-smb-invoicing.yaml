@@ -1,0 +1,82 @@
+id: 008-fintech-smb-invoicing
+version: 1
+title: "SMB invoicing + bank reconciliation SaaS for Indian micro-businesses"
+domain: fintech
+
+brief: |
+  Invoicing + bank reconciliation SaaS for Indian micro-businesses
+  (1-10 employees). Owners create GST-compliant invoices, share via
+  WhatsApp or email, accept UPI/cards, and we auto-reconcile payments
+  against bank-account feeds via account-aggregator APIs (Setu/Finbox/
+  Perfios). Expected scale: 5k paying SMBs at launch, 50k in year 2.
+  Pricing is freemium (free up to 25 invoices/month, paid above).
+  Must integrate with GSTN for e-invoicing once a customer crosses
+  the ₹5 crore threshold. Must store financial records for 8 years per
+  Indian tax law. Founders are ex-banker + ex-PM; the engineering team
+  is 4 (one full-stack lead + three generalists).
+
+requirements:
+  must_have:
+    - "GST-compliant invoice generation with serial-number continuity"
+    - "Payment links (UPI + cards) embedded in invoices, with reconciliation"
+    - "Bank-feed ingestion via account-aggregator (Setu/Finbox/Perfios)"
+    - "GSTN e-invoicing integration above ₹5 crore turnover threshold"
+    - "8-year retention of invoices + payment records (Indian Income Tax Act)"
+    - "WhatsApp Business API for invoice delivery + reminders"
+  must_not:
+    - "Storing bank credentials directly (must use AA framework)"
+    - "Custom payment gateway (use Razorpay/Cashfree)"
+    - "Synchronous AA API calls in the request path (must be async/queued)"
+  nice_to_have:
+    - "OCR for purchase-invoice upload"
+    - "WhatsApp-bot UX for invoice creation"
+    - "Tally export for accountants"
+
+expected_components:
+  app_runtime:
+    - "Cloud Run"
+    - "Render"
+    - "Fly.io"
+  database:
+    - "Cloud SQL Postgres (asia-south1)"
+    - "AlloyDB"
+    - "Supabase Postgres"
+  payments:
+    - "Razorpay"
+    - "Cashfree"
+    - "PhonePe"
+  account_aggregator:
+    - "Setu"
+    - "Finbox"
+    - "Perfios"
+  gstn_integration:
+    - "ClearTax APIs"
+    - "Masters India APIs"
+    - "Direct GSTN sandbox"
+  messaging:
+    - "WhatsApp Business Platform (Meta Cloud API)"
+    - "Gupshup"
+    - "Wati"
+  archival_storage:
+    - "Cloud Storage Coldline"
+    - "S3 Glacier Deep Archive"
+
+forbidden_components:
+  - "Storing bank account login credentials"
+  - "Synchronous AA polling"
+  - "Sending raw GST PAN over WhatsApp"
+  - "Single-region us-east deployment"
+
+max_cost_usd: 0.55
+
+expected_brief_cost_usd_per_month:
+  min: 400
+  max: 2500
+
+notes: |
+  Tests India-specific fintech constraints: GST, AA framework, WhatsApp
+  delivery, 8-year retention. Should pick asia-south1 + Razorpay/Cashfree
+  and propose an AA integration path (NOT direct bank scraping). 8-year
+  retention should drive an explicit archival-storage decision. The
+  freemium pricing constraint should keep architecture costs lean —
+  no enterprise components like Snowflake/Datadog.

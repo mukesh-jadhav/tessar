@@ -1,0 +1,77 @@
+id: 004-devtool-feature-flags
+version: 1
+title: "Self-serve feature-flag + experimentation SaaS for product teams"
+domain: devtool
+
+brief: |
+  We are building a self-serve feature-flag + A/B-testing SaaS for product
+  and engineering teams at 20-200-person companies. Customers SDK-embed
+  our client in web + mobile apps; we evaluate flag rules at the edge
+  (sub-50ms global p95) and stream variant assignments back for analytics.
+  Pricing is per-MAU. Expected 100 paying tenants in year 1, each with
+  10k–500k MAU. SDK target latency dominates technical choices. Compliance:
+  SOC-2 in 12 months, GDPR from day one (we sell to EU SaaS). Team is 5
+  engineers; we want to ship the MVP in 14 weeks.
+
+requirements:
+  must_have:
+    - "Edge-evaluated flag rules with sub-50ms global p95"
+    - "JavaScript + iOS + Android SDKs with bounded payload size"
+    - "Multi-tenant rule store with per-tenant isolation"
+    - "Event ingestion for assignment + exposure logs (millions/day)"
+    - "GDPR-compliant EU data residency option"
+    - "SSO (Google OAuth + SAML) for the admin console"
+  must_not:
+    - "Centralised flag evaluation in one region (kills p95)"
+    - "Storing customer PII in the assignment-log stream"
+    - "Self-managed Kafka cluster"
+  nice_to_have:
+    - "Bucketing-stable sticky assignments across SDK versions"
+    - "Bayesian + frequentist analysis modes"
+    - "Slack notifications when a flag fully ramps"
+
+expected_components:
+  edge_runtime:
+    - "Cloudflare Workers"
+    - "Fastly Compute@Edge"
+    - "Vercel Edge Functions"
+    - "AWS Lambda@Edge"
+  rule_store:
+    - "Cloudflare Workers KV"
+    - "DynamoDB Global Tables"
+    - "Redis Enterprise Cloud"
+  event_ingestion:
+    - "Pub/Sub"
+    - "Kinesis Data Streams"
+    - "Kafka (managed Confluent Cloud)"
+  analytics_warehouse:
+    - "BigQuery"
+    - "ClickHouse Cloud"
+    - "Snowflake"
+  admin_runtime:
+    - "Cloud Run"
+    - "Fly.io"
+    - "Render"
+  auth:
+    - "WorkOS"
+    - "Auth.js"
+    - "Clerk"
+
+forbidden_components:
+  - "Single-region MySQL as rule store" # kills global latency
+  - "Self-managed Kafka"
+  - "Polling rule fetch from clients" # must be push/edge
+  - "Putting raw event ingestion into Postgres"
+
+max_cost_usd: 0.50
+
+expected_brief_cost_usd_per_month:
+  min: 600
+  max: 4000
+
+notes: |
+  Tests an edge-first architecture. Should recommend a CDN-edge runtime
+  for flag evaluation plus a separate ingestion path for events. Should
+  NOT collapse everything onto Cloud Run/regional Postgres (it would
+  fail the p95 NFR). GDPR + EU residency must surface as a top-3 risk
+  and influence at least one architecture decision.

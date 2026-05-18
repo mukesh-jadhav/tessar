@@ -1,0 +1,79 @@
+id: 010-b2b-event-webhooks
+version: 1
+title: "Webhooks-as-a-service for SaaS event delivery"
+domain: b2b-saas
+
+brief: |
+  Webhooks-as-a-service: a hosted reliable delivery layer that SaaS
+  companies embed instead of building their own webhook pipeline. We
+  accept events from the customer's app, sign them, deliver them to
+  their end-users' endpoints with exponential backoff, expose a delivery
+  log, replay failed events, and provide an embedded portal so the
+  customer's users can configure endpoints + secrets themselves. Year-1
+  target: 30 paying SaaS tenants, combined ~20M events/day, 95th-pct
+  delivery success in 5 minutes. Pricing per-event with a free tier.
+  Compliance: SOC-2 Type II within 12 months; data-residency option in
+  the EU. Team is 4 engineers.
+
+requirements:
+  must_have:
+    - "Durable event ingestion (no event lost on broker crash)"
+    - "Per-endpoint signed delivery with HMAC-SHA256"
+    - "Exponential-backoff retry with poison-event quarantine"
+    - "Delivery log queryable by event id, endpoint id, time range"
+    - "Embeddable JS portal for customer's end-users to manage endpoints"
+    - "EU data-residency mode (region-pinned ingestion + storage)"
+  must_not:
+    - "Storing payloads in plain text without encryption-at-rest"
+    - "Polling-based delivery (must be push w/ async retry)"
+    - "Single-region active-active write path" # would need conflict resolution we don't want
+  nice_to_have:
+    - "Transformations layer (rename/filter/enrich fields per endpoint)"
+    - "Webhook simulator for customers' QA environments"
+    - "OpenTelemetry export of delivery spans for customers"
+
+expected_components:
+  ingest_path:
+    - "Cloud Run + Pub/Sub"
+    - "API Gateway + SQS"
+    - "Fly.io + NATS"
+  delivery_workers:
+    - "Cloud Run jobs (push subscription)"
+    - "Kubernetes (KEDA-autoscaled)"
+    - "Lambda + EventBridge Pipes"
+  durable_queue:
+    - "Pub/Sub"
+    - "SQS"
+    - "Kafka (Confluent Cloud)"
+    - "NATS JetStream"
+  delivery_log_store:
+    - "ClickHouse Cloud"
+    - "BigQuery"
+    - "Cloud SQL Postgres (with TimescaleDB)"
+  metadata_db:
+    - "Cloud SQL Postgres"
+    - "AlloyDB"
+  embedded_portal:
+    - "React SDK hosted on customer pages"
+    - "iframe-served portal"
+
+forbidden_components:
+  - "Synchronous delivery in the request path"
+  - "Single-broker SPOF"
+  - "Plain Postgres as the high-volume delivery log" # wrong shape for 20M/day with replay queries
+  - "Self-managed Kafka without dedicated SRE"
+
+max_cost_usd: 0.55
+
+expected_brief_cost_usd_per_month:
+  min: 700
+  max: 4500
+
+notes: |
+  Tests reliable async delivery as the core competence. Should pick a
+  durable broker (Pub/Sub, SQS, Kafka) NOT a Redis list. Delivery-log
+  store should be columnar (ClickHouse, BigQuery) or time-series
+  (Timescale) — not raw Postgres at 20M events/day. EU residency must
+  surface as a concrete deployment-shape decision, not just hand-waved.
+  Should NOT propose a complicated bi-directional sync architecture
+  (must_not bullet rules it out).

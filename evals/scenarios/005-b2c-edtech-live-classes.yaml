@@ -1,0 +1,77 @@
+id: 005-b2c-edtech-live-classes
+version: 1
+title: "Live small-group tutoring platform for K-12 students"
+domain: b2c-saas
+
+brief: |
+  Live small-group tutoring platform for K-12 students in India + SE Asia.
+  Parents book recurring 60-minute sessions of up to 6 students with a
+  vetted tutor; sessions run in a video classroom with shared whiteboard
+  and a guided lesson plan. Currently 2k families in private beta; aim
+  20k families and 800 active tutors in 12 months. Mobile-first (Android
+  dominant; ~70%). Payments in INR (subscription, not pay-per-class) with
+  UPI as preferred method. Must support patchy 3G connections common in
+  Tier-2 cities. Recordings stored for parent review for 90 days.
+
+requirements:
+  must_have:
+    - "Multi-party low-bandwidth video classroom (6-8 participants)"
+    - "Shared whiteboard with low-bandwidth diff sync"
+    - "Tutor + student scheduling with recurring slots"
+    - "Recurring INR subscription billing with UPI autopay (e-mandate)"
+    - "Recording storage with 90-day retention and parental access"
+    - "Tutor onboarding workflow with KYC verification"
+  must_not:
+    - "Self-hosted SFU / media server (3-engineer team; use a managed WebRTC vendor)"
+    - "Single-region deployment outside Asia (300ms+ RTT for primary users)"
+    - "Card-only billing (UPI is the dominant method in target geography)"
+  nice_to_have:
+    - "AI-generated session summary for parents"
+    - "Offline-first session notes that sync when bandwidth returns"
+    - "Referral credit system"
+
+expected_components:
+  video_runtime:
+    - "Daily.co"
+    - "100ms"
+    - "Agora"
+    - "Twilio Video"
+    - "LiveKit Cloud"
+  realtime_collab:
+    - "Liveblocks"
+    - "Y.js + y-websocket"
+    - "Firebase Realtime DB"
+  database:
+    - "Cloud SQL Postgres (asia-south1)"
+    - "AlloyDB"
+    - "Supabase Postgres"
+  recurring_billing:
+    - "Razorpay Subscriptions"
+    - "Cashfree Subscriptions"
+    - "Juspay"
+  recordings_storage:
+    - "Cloud Storage (Nearline)"
+    - "S3 Intelligent-Tiering"
+  mobile_framework:
+    - "React Native"
+    - "Expo"
+    - "Flutter"
+
+forbidden_components:
+  - "Self-hosted WebRTC SFU" # team size mismatch
+  - "Stripe-only billing" # weak UPI autopay support in India
+  - "Single-region us-east deployment" # latency
+  - "Custom video codec stack"
+
+max_cost_usd: 0.50
+
+expected_brief_cost_usd_per_month:
+  min: 800
+  max: 5000
+
+notes: |
+  Tests two combined constraints: low-bandwidth video for emerging-market
+  users, and INR subscription billing. Should pick a managed WebRTC vendor
+  (Daily/100ms/Agora) and Razorpay/Cashfree Subscriptions for autopay.
+  Should surface bandwidth + dropped-call failure modes in the risks
+  section. India-residency hint should pull asia-south1.

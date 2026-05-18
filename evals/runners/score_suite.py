@@ -42,7 +42,9 @@ def _load_yaml(path: Path) -> dict:
     return yaml.safe_load(path.read_text(encoding="utf-8"))
 
 
-def _scenario_to_fixture(scenario_path: Path, fixtures_dir: Path = FIXTURES_DIR) -> Path:
+def _scenario_to_fixture(
+    scenario_path: Path, fixtures_dir: Path = FIXTURES_DIR
+) -> Path:
     """`scenarios/001-b2b-saas-crm.yaml` → `<fixtures_dir>/run-001.json`. The
     numeric prefix is the join key (matches ADR-0008's reproducibility
     contract — re-running the same scenario must hit the same fixture)."""

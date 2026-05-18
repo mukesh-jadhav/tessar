@@ -233,8 +233,7 @@ class VertexClaudeProvider(LlmProvider):
 
         rates = self._pricing[tier]
         cost_usd = (
-            prompt_tokens / 1000.0 * rates["input"]
-            + completion_tokens / 1000.0 * rates["output"]
+            prompt_tokens / 1000.0 * rates["input"] + completion_tokens / 1000.0 * rates["output"]
         )
 
         return LlmResponse(

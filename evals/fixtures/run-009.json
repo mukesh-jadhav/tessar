@@ -1,0 +1,158 @@
+{
+  "_comment": "Fixture for scenario 009 — global creator-services marketplace; split pay-in / pay-out vendors.",
+  "id": "fixture-009",
+  "generatedAt": "2026-05-17T12:00:00Z",
+  "kbSnapshotId": "kb-fixture",
+  "brief": "Two-sided marketplace for short-form-video creator services. Buyers US/EU; sellers IN/PH/PK/BR/NG. $200k GMV/mo.",
+  "requirements": [
+    {
+      "id": "r1",
+      "label": "Pay-in",
+      "value": "Cards + Apple/Google Pay + SEPA + UPI",
+      "source": "brief"
+    },
+    { "id": "r2", "label": "Pay-out", "value": "50+ countries (incl. PK, NG)", "source": "brief" },
+    { "id": "r3", "label": "Escrow", "value": "milestone-release", "source": "brief" },
+    { "id": "r4", "label": "KYC", "value": "above payout threshold", "source": "brief" },
+    { "id": "r5", "label": "Chat", "value": "in-app with file attachments", "source": "brief" }
+  ],
+  "nodes": [
+    { "id": "web", "label": "Cloud Run (Next.js)", "cite": 1 },
+    { "id": "db", "label": "Cloud SQL Postgres", "cite": 2 },
+    { "id": "payin", "label": "Stripe (global pay-in)", "cite": 3 },
+    { "id": "payout", "label": "Wise Platform (pay-out)", "cite": 4 },
+    { "id": "kyc", "label": "Persona (KYC/KYB)", "cite": 5 },
+    { "id": "chat", "label": "Stream Chat", "cite": 6 },
+    { "id": "files", "label": "Cloud Storage + signed URLs", "cite": 7 }
+  ],
+  "decisions": [
+    {
+      "id": "d1",
+      "topic": "Pay-in / pay-out split",
+      "pick": "Stripe (pay-in) + Wise Platform (pay-out)",
+      "vs": "vs Stripe Connect Express alone",
+      "why": "Stripe Connect Express is not supported in Pakistan/Nigeria — sellers there would be locked out",
+      "conf": "high",
+      "cite": 4,
+      "reversibility": "1-way",
+      "blastRadius": "platform",
+      "revisitAt": "if Stripe Connect adds Pakistan + Nigeria coverage"
+    },
+    {
+      "id": "d2",
+      "topic": "Identity verification",
+      "pick": "Persona",
+      "vs": "vs Sumsub · Onfido",
+      "why": "single SDK for KYC + KYB; broad doc-type coverage across target markets; usage-based pricing",
+      "conf": "med",
+      "cite": 5,
+      "reversibility": "2-way",
+      "blastRadius": "platform",
+      "revisitAt": "if false-reject rate exceeds 5% in any market"
+    },
+    {
+      "id": "d3",
+      "topic": "Chat & file delivery",
+      "pick": "Stream Chat + Cloud Storage signed URLs",
+      "vs": "vs SendBird · build in-house",
+      "why": "chat is core trust surface; build-it-yourself burns 2 engineers; Stream gives moderation tooling out-of-the-box",
+      "conf": "high",
+      "cite": 6,
+      "reversibility": "2-way",
+      "blastRadius": "platform",
+      "revisitAt": "if Stream pricing exceeds 10% of GMV cost line"
+    }
+  ],
+  "bom": [
+    { "id": "b1", "name": "Cloud Run", "kind": "compute", "baseCost": 200.0, "cite": 1 },
+    { "id": "b2", "name": "Cloud SQL Postgres", "kind": "data", "baseCost": 150.0, "cite": 2 },
+    { "id": "b3", "name": "Stripe (pay-in fees)", "kind": "vendor", "baseCost": 600.0, "cite": 3 },
+    {
+      "id": "b4",
+      "name": "Wise Platform (pay-out)",
+      "kind": "vendor",
+      "baseCost": 250.0,
+      "cite": 4
+    },
+    { "id": "b5", "name": "Persona", "kind": "vendor", "baseCost": 400.0, "cite": 5 },
+    { "id": "b6", "name": "Stream Chat", "kind": "vendor", "baseCost": 350.0, "cite": 6 },
+    { "id": "b7", "name": "Cloud Storage", "kind": "storage", "baseCost": 60.0, "cite": 7 }
+  ],
+  "risks": [
+    {
+      "id": "k1",
+      "title": "Payment-fraud chargebacks from buyers using stolen cards",
+      "severity": "high",
+      "likelihood": "med",
+      "mitigation": "Stripe Radar tuned for category; manual review queue above $500; hold pay-out until escrow window clears",
+      "cite": 3
+    },
+    {
+      "id": "k2",
+      "title": "Sanctions exposure on payout to PK / NG sellers",
+      "severity": "high",
+      "likelihood": "low",
+      "mitigation": "Wise built-in sanctions screening + Persona KYC at threshold; deny-list aligned to OFAC/EU consolidated list",
+      "cite": 4
+    },
+    {
+      "id": "k3",
+      "title": "Dispute backlog overwhelms 4-person team",
+      "severity": "med",
+      "likelihood": "high",
+      "mitigation": "in-product self-serve dispute flow; admin tool with SLA timer; SLA escalation to founders if > 48h",
+      "cite": 6
+    }
+  ],
+  "sources": [
+    {
+      "id": 1,
+      "title": "Cloud Run docs",
+      "publisher": "GCP",
+      "url": "https://cloud.google.com/run/docs",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 2,
+      "title": "Cloud SQL Postgres pricing",
+      "publisher": "GCP",
+      "url": "https://cloud.google.com/sql/pricing",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 3,
+      "title": "Stripe global pricing",
+      "publisher": "Stripe",
+      "url": "https://stripe.com/pricing",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 4,
+      "title": "Wise Platform supported countries",
+      "publisher": "Wise",
+      "url": "https://wise.com/platform",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 5,
+      "title": "Persona pricing",
+      "publisher": "Persona",
+      "url": "https://withpersona.com/pricing",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 6,
+      "title": "Stream Chat pricing",
+      "publisher": "Stream",
+      "url": "https://getstream.io/chat/pricing/",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 7,
+      "title": "Cloud Storage signed URLs",
+      "publisher": "GCP",
+      "url": "https://cloud.google.com/storage/docs/access-control/signed-urls",
+      "verifiedAt": "2026-05-01"
+    }
+  ]
+}

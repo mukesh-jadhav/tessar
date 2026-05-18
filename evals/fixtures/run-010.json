@@ -1,0 +1,147 @@
+{
+  "_comment": "Fixture for scenario 010 — webhooks-as-a-service reliable delivery layer at 20M events/day.",
+  "id": "fixture-010",
+  "generatedAt": "2026-05-17T12:00:00Z",
+  "kbSnapshotId": "kb-fixture",
+  "brief": "Webhooks-as-a-service for SaaS. 30 tenants, 20M events/day, 95-pct delivered within 5min, EU residency option.",
+  "requirements": [
+    { "id": "r1", "label": "Durability", "value": "no loss on broker crash", "source": "brief" },
+    {
+      "id": "r2",
+      "label": "Retry",
+      "value": "exponential backoff + poison-event quarantine",
+      "source": "brief"
+    },
+    { "id": "r3", "label": "Log query", "value": "by event/endpoint/time", "source": "brief" },
+    {
+      "id": "r4",
+      "label": "Portal",
+      "value": "embeddable for customer's end-users",
+      "source": "brief"
+    },
+    { "id": "r5", "label": "Residency", "value": "EU region-pin", "source": "brief" }
+  ],
+  "nodes": [
+    { "id": "ingest", "label": "Cloud Run (ingest API)", "cite": 1 },
+    { "id": "bus", "label": "Pub/Sub (durable queue)", "cite": 2 },
+    { "id": "workers", "label": "Cloud Run jobs (delivery workers)", "cite": 1 },
+    { "id": "meta", "label": "Cloud SQL Postgres (endpoints, secrets)", "cite": 3 },
+    { "id": "log", "label": "ClickHouse Cloud (delivery log)", "cite": 4 },
+    { "id": "portal", "label": "React SDK (embedded portal)", "cite": 5 }
+  ],
+  "decisions": [
+    {
+      "id": "d1",
+      "topic": "Durable broker",
+      "pick": "Pub/Sub",
+      "vs": "vs SQS · Kafka · NATS JetStream",
+      "why": "managed durability; dead-letter topics; push subscriptions map cleanly to Cloud Run worker pattern; 4-eng team can't run Kafka",
+      "conf": "high",
+      "cite": 2,
+      "reversibility": "1-way",
+      "blastRadius": "queue",
+      "revisitAt": "if multi-cloud customers require AWS-native ingestion"
+    },
+    {
+      "id": "d2",
+      "topic": "Delivery log store",
+      "pick": "ClickHouse Cloud",
+      "vs": "vs Postgres + Timescale · BigQuery",
+      "why": "20M rows/day with point + range queries (by event_id, endpoint_id, time); columnar pricing predictable",
+      "conf": "high",
+      "cite": 4,
+      "reversibility": "1-way",
+      "blastRadius": "data",
+      "revisitAt": "if log retention or query patterns shift"
+    },
+    {
+      "id": "d3",
+      "topic": "EU residency model",
+      "pick": "Separate EU project (Pub/Sub + ClickHouse + Cloud SQL) region-pinned",
+      "vs": "vs single multi-region cluster with row-policy",
+      "why": "data-residency law requires data not to leave region; multi-region replication is a leak surface",
+      "conf": "high",
+      "cite": 2,
+      "reversibility": "1-way",
+      "blastRadius": "platform",
+      "revisitAt": "if a 3rd residency region (e.g. India) becomes commercially required"
+    }
+  ],
+  "bom": [
+    { "id": "b1", "name": "Cloud Run", "kind": "compute", "baseCost": 250.0, "cite": 1 },
+    { "id": "b2", "name": "Pub/Sub", "kind": "network", "baseCost": 400.0, "cite": 2 },
+    { "id": "b3", "name": "Cloud SQL Postgres", "kind": "data", "baseCost": 120.0, "cite": 3 },
+    { "id": "b4", "name": "ClickHouse Cloud", "kind": "data", "baseCost": 900.0, "cite": 4 },
+    { "id": "b5", "name": "Cloud Storage", "kind": "storage", "baseCost": 40.0, "cite": 6 }
+  ],
+  "risks": [
+    {
+      "id": "k1",
+      "title": "Endpoint sinkholes silently breach 5-min SLO",
+      "severity": "high",
+      "likelihood": "high",
+      "mitigation": "circuit-breaker per endpoint after N consecutive 5xx; emit health metric per tenant; in-portal alert",
+      "cite": 2
+    },
+    {
+      "id": "k2",
+      "title": "Secret leak via shared HMAC key in customer code",
+      "severity": "high",
+      "likelihood": "med",
+      "mitigation": "per-endpoint keys; rotation API; portal flags reuse; signed payload contains key-id for rotation",
+      "cite": 3
+    },
+    {
+      "id": "k3",
+      "title": "Replay storm overloads downstream when bulk-replay is triggered",
+      "severity": "med",
+      "likelihood": "med",
+      "mitigation": "replay UI requires explicit rate cap; default 50 evt/s; respect endpoint circuit-breaker",
+      "cite": 4
+    }
+  ],
+  "sources": [
+    {
+      "id": 1,
+      "title": "Cloud Run docs",
+      "publisher": "GCP",
+      "url": "https://cloud.google.com/run/docs",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 2,
+      "title": "Pub/Sub durability + DLQ",
+      "publisher": "GCP",
+      "url": "https://cloud.google.com/pubsub/docs/handling-failures",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 3,
+      "title": "Cloud SQL Postgres pricing",
+      "publisher": "GCP",
+      "url": "https://cloud.google.com/sql/pricing",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 4,
+      "title": "ClickHouse Cloud pricing",
+      "publisher": "ClickHouse",
+      "url": "https://clickhouse.com/pricing",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 5,
+      "title": "Embedded portal SDK pattern",
+      "publisher": "Svix",
+      "url": "https://docs.svix.com/app-portal",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 6,
+      "title": "Cloud Storage pricing",
+      "publisher": "GCP",
+      "url": "https://cloud.google.com/storage/pricing",
+      "verifiedAt": "2026-05-01"
+    }
+  ]
+}

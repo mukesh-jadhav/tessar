@@ -1,0 +1,80 @@
+id: 007-b2b-analytics-multitenant
+version: 1
+title: "Multi-tenant product-analytics SaaS for B2B SaaS customers"
+domain: b2b-saas
+
+brief: |
+  Multi-tenant product-analytics SaaS aimed at B2B SaaS companies. Our
+  customers' apps send us event streams (events, identifies, page-views)
+  via SDKs; we ingest, store, and let their PMs run funnels, retention,
+  and cohort queries through a web UI. Expected scale at year 1: 50
+  paying tenants ingesting a combined ~500M events/day, retained 13
+  months. Queries are interactive (target p95 < 5s for typical funnels).
+  Compliance: SOC-2 Type II ready in 12 months, HIPAA-eligible tier
+  in 18 months. Team: 8 engineers. We need clean per-tenant cost
+  attribution so we can price fairly.
+
+requirements:
+  must_have:
+    - "Ingest pipeline that absorbs spiky tenant traffic without backpressure"
+    - "Columnar event store with interactive query p95 < 5s on 500M events/day"
+    - "Per-tenant data isolation (strict — no cross-tenant query leak)"
+    - "Per-tenant cost attribution dashboard (internal)"
+    - "Audit trail of every query against tenant data (SOC-2 prerequisite)"
+    - "PII tagging on event properties with per-tenant deletion API (GDPR)"
+  must_not:
+    - "Postgres as the primary event store (wrong shape for 500M events/day)"
+    - "Per-tenant database instance (cost-prohibitive at 50+ tenants)"
+    - "Storing raw IP addresses without hashing or TTL"
+  nice_to_have:
+    - "Materialized cohort tables for top-100 queries"
+    - "Reverse-ETL connector for syncing computed cohorts to customer warehouses"
+    - "Real-time alerts on metric anomalies"
+
+expected_components:
+  event_ingest:
+    - "Pub/Sub"
+    - "Kinesis Data Streams"
+    - "Kafka (managed Confluent)"
+  event_store:
+    - "ClickHouse Cloud"
+    - "BigQuery"
+    - "Snowflake"
+    - "Druid"
+  app_runtime:
+    - "Cloud Run"
+    - "GKE Autopilot"
+  cache:
+    - "Memorystore Redis"
+    - "Upstash"
+  query_layer:
+    - "ClickHouse native HTTP"
+    - "Trino / Starburst Galaxy"
+    - "BigQuery BI Engine"
+  metadata_db:
+    - "Cloud SQL Postgres"
+    - "AlloyDB"
+  observability:
+    - "Grafana Cloud"
+    - "Datadog"
+    - "Honeycomb"
+
+forbidden_components:
+  - "Postgres as primary event store"
+  - "Per-tenant DB instances"
+  - "Elasticsearch as analytics engine" # wrong shape for funnels
+  - "Self-managed Kafka without a dedicated SRE"
+
+max_cost_usd: 0.60
+
+expected_brief_cost_usd_per_month:
+  min: 3500
+  max: 18000
+
+notes: |
+  Tests heavy-data architecture choices. Should pick a columnar OLAP
+  store (ClickHouse/BigQuery) and a streaming ingest path (Pub/Sub or
+  Kinesis). Should NOT collapse the ingest path through Postgres.
+  Multi-tenant isolation + cost attribution + SOC-2 should all appear
+  as decisions or risks with rationale. HIPAA-future hint should
+  surface in the roadmap section but should NOT distort the MVP shape.

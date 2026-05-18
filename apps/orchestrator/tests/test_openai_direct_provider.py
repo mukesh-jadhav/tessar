@@ -184,9 +184,7 @@ def test_generate_happy_path_returns_llm_response() -> None:
     assert resp.usage.prompt_tokens == 120
     assert resp.usage.completion_tokens == 8
     # gpt-5: 120 * 0.00125/1000 + 8 * 0.010/1000
-    assert resp.usage.cost_usd == pytest.approx(
-        120 * 0.00125 / 1000 + 8 * 0.010 / 1000, rel=1e-6
-    )
+    assert resp.usage.cost_usd == pytest.approx(120 * 0.00125 / 1000 + 8 * 0.010 / 1000, rel=1e-6)
 
 
 def test_generate_passes_json_response_format() -> None:

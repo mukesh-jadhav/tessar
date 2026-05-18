@@ -1,0 +1,75 @@
+id: 006-internal-hr-onboarding
+version: 1
+title: "Internal HR onboarding workflow tool for a 300-person scaleup"
+domain: internal-tool
+
+brief: |
+  Internal tool for the People Ops team of a 300-person SaaS company
+  to manage employee onboarding. New-hire flow: collect documents,
+  trigger account provisioning across Google Workspace + GitHub + Slack
+  + Notion + 1Password, assign a buddy, schedule week-1 trainings, and
+  track 90-day check-ins. Replaces a mess of Notion docs + Zapier zaps
+  + Slack reminders. Roughly 60 hires/year. Built and maintained by one
+  internal full-stack engineer with no dedicated SRE. Lives behind the
+  corporate SSO; only People Ops + IT can use the admin side.
+
+requirements:
+  must_have:
+    - "Workflow definition (steps + owners + due dates) editable by People Ops without code"
+    - "OAuth connectors for Google Workspace, GitHub, Slack, Notion, 1Password"
+    - "Document upload + e-signature for offer letters and policies"
+    - "SSO via Google Workspace for both admins and new hires"
+    - "Audit log of every account-provisioning action"
+    - "Status dashboard with stuck-step alerting to Slack"
+  must_not:
+    - "Custom-built workflow engine (way over scope for one engineer)"
+    - "Multi-region deployment (single region is fine for 60 hires/yr)"
+    - "Microservices (1 engineer, monolith only)"
+  nice_to_have:
+    - "Slack-native bot for nudges to assignees"
+    - "Reporting export to BigQuery for HR analytics"
+    - "Mobile-friendly view for new hires"
+
+expected_components:
+  app_runtime:
+    - "Cloud Run"
+    - "Render"
+    - "Fly.io"
+  workflow_engine:
+    - "Temporal Cloud"
+    - "Inngest"
+    - "Trigger.dev"
+    - "Hatchet"
+  database:
+    - "Cloud SQL Postgres"
+    - "Supabase Postgres"
+    - "Neon"
+  document_signing:
+    - "Dropbox Sign"
+    - "DocuSign"
+    - "PandaDoc"
+  document_storage:
+    - "Cloud Storage"
+    - "S3"
+  auth:
+    - "Google Workspace SSO via Auth.js"
+    - "WorkOS"
+
+forbidden_components:
+  - "Self-built workflow engine"
+  - "Microservices split"
+  - "Multi-region active-active"
+  - "Apache Airflow" # wrong tool for human-in-the-loop workflows
+
+max_cost_usd: 0.40
+
+expected_brief_cost_usd_per_month:
+  min: 50
+  max: 400
+
+notes: |
+  Single-engineer internal-tool brief. The agents should pick a managed
+  workflow engine (Temporal/Inngest/Trigger.dev) rather than rolling
+  their own. Should surface "key person dependency" as a top risk.
+  Cost should be deliberately minimal — Cloud Run on min-instances=0,
+  smallest Postgres tier. No CDN/global LB needed.
