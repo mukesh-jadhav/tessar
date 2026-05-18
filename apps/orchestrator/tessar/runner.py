@@ -82,42 +82,151 @@ from tessar.canned_timeline import iter_with_delays
 from tessar.config import settings
 from tessar.db import get_engine, get_sessionmaker
 from tessar.db.models import ArtifactKind, Run, RunArtifact, RunEvent, RunStatus
-from tessar.llm.budget import BudgetExceeded
 from tessar.llm.factory import build_router
-from tessar.llm.router import AllProvidersFailed
+from tessar.observability import capture_exception
 from tessar.redis_bus import publish as redis_publish
+from tessar.reliability import ERROR_NOTES, handle_agent_failure, with_db_retry
 from tessar.schemas import BriefGuide, BriefInput
 from tessar.search import build_search_client
 from tessar.storage import upload_bytes, upload_text
 
+
+class BriefMissingError(Exception):
+    """Raised when a run row vanishes between enqueue and execution.
+
+    Treated as **permanent** by the Pub/Sub push handler: redelivering
+    the same message will just hit the same missing row, so we ack-and-
+    drop instead of looping forever on a dead message.
+    """
+
+
+class CrashRecoveryRefusal(Exception):
+    """Raised when a run is re-delivered while still marked ``running``.
+
+    The previous attempt crashed (Cloud Run instance OOM, SIGKILL on
+    deploy, etc.). Re-executing automatically would double-charge the
+    LLM budget and possibly duplicate artifacts, so we mark the run
+    failed and refuse the retry. The user can re-submit the brief.
+    """
+
+
 log = structlog.get_logger(__name__)
 
 
-async def run(run_id: str) -> None:
-    """Execute one run end-to-end. Idempotent at the DB layer: if the run
-    is already terminal, this is a no-op (Pub/Sub may redeliver)."""
+async def run(run_id: str, *, delivery_attempt: int = 1) -> None:
+    """Execute one run end-to-end.
+
+    Reliability contract (see ADR-0013):
+
+    * **Idempotent on terminal states.** A redelivered message for a
+      ``succeeded`` / ``failed`` / ``refunded`` run is a no-op.
+    * **Crash-recovery safe.** A redelivered message whose run is
+      already ``running`` is treated as evidence the previous worker
+      crashed; we mark the run failed and refuse to re-execute so we
+      do not double-charge the LLM budget.
+    * **Every agent failure is funnelled** through
+      :func:`tessar.reliability.handle_agent_failure` so Sentry,
+      Postgres, and the SSE stream all see the same picture.
+    * **DB writes retry** transient infra blips (see
+      :func:`with_db_retry`) so a single Postgres leader election does
+      not fail an in-flight run.
+
+    Parameters
+    ----------
+    delivery_attempt:
+        Pub/Sub delivery attempt number (1-based). The caller in
+        ``app.py`` extracts this from the push envelope; the default of
+        1 covers direct invocation from tests.
+    """
     engine = _engine()
     sessionmaker = get_sessionmaker(engine)
 
-    async with sessionmaker() as session:
-        row = await session.get(Run, run_id)
-        if row is None:
-            log.warning("run.not_found", run_id=run_id)
-            return
-        if row.status in (RunStatus.succeeded, RunStatus.failed, RunStatus.refunded):
-            log.info("run.already_terminal", run_id=run_id, status=row.status)
-            return
+    async def _claim() -> str | None:
+        async with sessionmaker() as session:
+            row = await session.get(Run, run_id)
+            if row is None:
+                return "not_found"
+            if row.status in (RunStatus.succeeded, RunStatus.failed, RunStatus.refunded):
+                return f"already_{row.status.value}"
+            if row.status == RunStatus.running and delivery_attempt > 1:
+                # The previous worker crashed mid-run. Auto-replay would
+                # re-spend LLM budget and possibly duplicate artifacts,
+                # so we hard-stop and let the user re-submit.
+                row.status = RunStatus.failed
+                row.completed_at = datetime.now(UTC)
+                await session.commit()
+                return "crash_recovery"
+            row.status = RunStatus.running
+            await session.commit()
+            return None
 
-        row.status = RunStatus.running
-        await session.commit()
+    claim = await with_db_retry(_claim, op="run.claim")
+    if claim == "not_found":
+        log.warning("run.not_found", run_id=run_id)
+        return
+    if claim == "crash_recovery":
+        log.error(
+            "run.crash_recovery_refused",
+            run_id=run_id,
+            delivery_attempt=delivery_attempt,
+        )
+        exc = CrashRecoveryRefusal(
+            f"run {run_id} was already running on delivery_attempt={delivery_attempt}; "
+            "refusing to re-execute"
+        )
+        capture_exception(
+            exc,
+            run_id=run_id,
+            classification="crash_recovery",
+            delivery_attempt=str(delivery_attempt),
+        )
+        # Best-effort UI notification — the run is already marked failed.
+        try:
+            await _emit(
+                run_id,
+                {
+                    "kind": "phase",
+                    "t": 0,
+                    "payload": {
+                        "phase": "orchestrator",
+                        "status": "failed",
+                        "note": ERROR_NOTES["crash_recovery"],
+                    },
+                },
+            )
+        except Exception:  # pragma: no cover - UI hint only
+            pass
+        return
+    if claim is not None:
+        log.info("run.already_terminal", run_id=run_id, status=claim)
+        return
 
-    log.info("run.started", run_id=run_id)
+    log.info("run.started", run_id=run_id, delivery_attempt=delivery_attempt)
 
     # ── Phase 3.3: real intake_normalizer ───────────────────────────
     # Load the brief from the row, run the real Tier-C normalizer, emit
     # phase events with the actual token + USD spend. The remaining 8
     # nodes still play from the canned timeline until 3.4+ replaces them.
-    brief_input = await _load_brief(run_id)
+    try:
+        brief_input = await _load_brief(run_id)
+    except BriefMissingError as exc:
+        # Poison message: the run row vanished. Permanently fail so
+        # Pub/Sub stops re-delivering. We still call _mark_failed in
+        # case the row reappeared in a race; it'll be a no-op otherwise.
+        log.error("run.brief_missing", run_id=run_id, error=str(exc))
+        capture_exception(exc, run_id=run_id, classification="brief_missing")
+        await _mark_failed(run_id)
+        return
+    except Exception as exc:
+        await handle_agent_failure(
+            run_id=run_id,
+            agent="load_brief",
+            exc=exc,
+            phase_event_t=0,
+            mark_failed=_mark_failed,
+            emit=_emit,
+        )
+        return
     router = build_router()
     try:
         normalized = await asyncio.to_thread(intake_normalize, brief_input, router=router)
@@ -141,6 +250,16 @@ async def run(run_id: str) -> None:
                     "note": "normalizer produced invalid JSON twice",
                 },
             },
+        )
+        return
+    except Exception as exc:
+        await handle_agent_failure(
+            run_id=run_id,
+            agent="intake_normalizer",
+            exc=exc,
+            phase_event_t=200,
+            mark_failed=_mark_failed,
+            emit=_emit,
         )
         return
 
@@ -213,6 +332,16 @@ async def run(run_id: str) -> None:
                     "note": "extractor produced invalid JSON twice",
                 },
             },
+        )
+        return
+    except Exception as exc:
+        await handle_agent_failure(
+            run_id=run_id,
+            agent="requirements_extractor",
+            exc=exc,
+            phase_event_t=1000,
+            mark_failed=_mark_failed,
+            emit=_emit,
         )
         return
 
@@ -292,6 +421,16 @@ async def run(run_id: str) -> None:
                     "note": "planner produced invalid JSON twice",
                 },
             },
+        )
+        return
+    except Exception as exc:
+        await handle_agent_failure(
+            run_id=run_id,
+            agent="research_planner",
+            exc=exc,
+            phase_event_t=1300,
+            mark_failed=_mark_failed,
+            emit=_emit,
         )
         return
 
@@ -486,6 +625,16 @@ async def run(run_id: str) -> None:
             },
         )
         return
+    except Exception as exc:
+        await handle_agent_failure(
+            run_id=run_id,
+            agent="synthesizer",
+            exc=exc,
+            phase_event_t=4300,
+            mark_failed=_mark_failed,
+            emit=_emit,
+        )
+        return
 
     spend = router.budget.state()
     n_decisions = len(synthesis.decisions)
@@ -571,24 +720,14 @@ async def run(run_id: str) -> None:
             },
         )
         return
-    except (AllProvidersFailed, BudgetExceeded) as e:
-        log.error("architect.failed", run_id=run_id, error=str(e), reason=type(e).__name__)
-        await _mark_failed(run_id)
-        await _emit(
-            run_id,
-            {
-                "kind": "phase",
-                "t": 4840,
-                "payload": {
-                    "phase": "architect",
-                    "status": "failed",
-                    "note": (
-                        "every LLM provider timed out or failed"
-                        if isinstance(e, AllProvidersFailed)
-                        else "per-run token budget exceeded"
-                    ),
-                },
-            },
+    except Exception as exc:
+        await handle_agent_failure(
+            run_id=run_id,
+            agent="architect",
+            exc=exc,
+            phase_event_t=4840,
+            mark_failed=_mark_failed,
+            emit=_emit,
         )
         return
 
@@ -675,6 +814,16 @@ async def run(run_id: str) -> None:
                     "note": "cost_estimator produced ungrounded or inconsistent output twice",
                 },
             },
+        )
+        return
+    except Exception as exc:
+        await handle_agent_failure(
+            run_id=run_id,
+            agent="cost_estimator",
+            exc=exc,
+            phase_event_t=5280,
+            mark_failed=_mark_failed,
+            emit=_emit,
         )
         return
 
@@ -765,6 +914,16 @@ async def run(run_id: str) -> None:
                     "note": "risk_writer produced ungrounded or dangling output twice",
                 },
             },
+        )
+        return
+    except Exception as exc:
+        await handle_agent_failure(
+            run_id=run_id,
+            agent="risk_writer",
+            exc=exc,
+            phase_event_t=5800,
+            mark_failed=_mark_failed,
+            emit=_emit,
         )
         return
 
@@ -885,6 +1044,16 @@ async def run(run_id: str) -> None:
             },
         )
         return
+    except Exception as exc:
+        await handle_agent_failure(
+            run_id=run_id,
+            agent="packager",
+            exc=exc,
+            phase_event_t=6420,
+            mark_failed=_mark_failed,
+            emit=_emit,
+        )
+        return
 
     spend = router.budget.state()
     n_sources_pkg = len(pkg.sources)
@@ -924,66 +1093,90 @@ async def run(run_id: str) -> None:
         spent_usd=spend.spent_usd,
     )
 
-    md_uri = upload_text(
-        key=f"runs/{run_id}/package.md", body=md_body, content_type="text/markdown"
-    )
-    json_uri = upload_bytes(
-        key=f"runs/{run_id}/package.json",
-        body=pkg_json_bytes,
-        content_type="application/json",
-    )
-    pdf_bytes = _render_pdf(md_body)
-    pdf_uri: str | None = None
-    if pdf_bytes is not None:
-        pdf_uri = upload_bytes(
-            key=f"runs/{run_id}/package.pdf",
-            body=pdf_bytes,
-            content_type="application/pdf",
+    # Finalisation: upload artifacts to GCS, write RunArtifact rows,
+    # flip the row to ``succeeded``, emit ``done``. Any failure here is
+    # NOT a partial success \u2014 the package has not been delivered to the
+    # user. Funnel through ``handle_agent_failure`` with agent="finalize"
+    # so Sentry tags it and the UI sees a real failure card.
+    try:
+        md_uri = await asyncio.to_thread(
+            upload_text,
+            key=f"runs/{run_id}/package.md",
+            body=md_body,
+            content_type="text/markdown",
         )
+        json_uri = await asyncio.to_thread(
+            upload_bytes,
+            key=f"runs/{run_id}/package.json",
+            body=pkg_json_bytes,
+            content_type="application/json",
+        )
+        pdf_bytes = _render_pdf(md_body)
+        pdf_uri: str | None = None
+        if pdf_bytes is not None:
+            pdf_uri = await asyncio.to_thread(
+                upload_bytes,
+                key=f"runs/{run_id}/package.pdf",
+                body=pdf_bytes,
+                content_type="application/pdf",
+            )
 
-    async with sessionmaker() as session:
-        session.add(
-            RunArtifact(
-                id=str(uuid.uuid4()),
-                run_id=run_id,
-                kind=ArtifactKind.package_md,
-                gcs_uri=md_uri,
-                mime="text/markdown",
-                bytes=len(md_body.encode("utf-8")),
-                sha256=None,
-                created_at=datetime.now(UTC),
-            )
-        )
-        session.add(
-            RunArtifact(
-                id=str(uuid.uuid4()),
-                run_id=run_id,
-                kind=ArtifactKind.package_json,
-                gcs_uri=json_uri,
-                mime="application/json",
-                bytes=len(pkg_json_bytes),
-                sha256=None,
-                created_at=datetime.now(UTC),
-            )
-        )
-        if pdf_uri is not None and pdf_bytes is not None:
-            session.add(
-                RunArtifact(
-                    id=str(uuid.uuid4()),
-                    run_id=run_id,
-                    kind=ArtifactKind.package_pdf,
-                    gcs_uri=pdf_uri,
-                    mime="application/pdf",
-                    bytes=len(pdf_bytes),
-                    sha256=None,
-                    created_at=datetime.now(UTC),
+        async def _finalise_db() -> None:
+            async with sessionmaker() as session:
+                session.add(
+                    RunArtifact(
+                        id=str(uuid.uuid4()),
+                        run_id=run_id,
+                        kind=ArtifactKind.package_md,
+                        gcs_uri=md_uri,
+                        mime="text/markdown",
+                        bytes=len(md_body.encode("utf-8")),
+                        sha256=None,
+                        created_at=datetime.now(UTC),
+                    )
                 )
-            )
-        row = await session.get(Run, run_id)
-        if row is not None:
-            row.status = RunStatus.succeeded
-            row.completed_at = datetime.now(UTC)
-        await session.commit()
+                session.add(
+                    RunArtifact(
+                        id=str(uuid.uuid4()),
+                        run_id=run_id,
+                        kind=ArtifactKind.package_json,
+                        gcs_uri=json_uri,
+                        mime="application/json",
+                        bytes=len(pkg_json_bytes),
+                        sha256=None,
+                        created_at=datetime.now(UTC),
+                    )
+                )
+                if pdf_uri is not None and pdf_bytes is not None:
+                    session.add(
+                        RunArtifact(
+                            id=str(uuid.uuid4()),
+                            run_id=run_id,
+                            kind=ArtifactKind.package_pdf,
+                            gcs_uri=pdf_uri,
+                            mime="application/pdf",
+                            bytes=len(pdf_bytes),
+                            sha256=None,
+                            created_at=datetime.now(UTC),
+                        )
+                    )
+                row = await session.get(Run, run_id)
+                if row is not None:
+                    row.status = RunStatus.succeeded
+                    row.completed_at = datetime.now(UTC)
+                await session.commit()
+
+        await with_db_retry(_finalise_db, op="run.finalise")
+    except Exception as exc:
+        await handle_agent_failure(
+            run_id=run_id,
+            agent="finalize",
+            exc=exc,
+            phase_event_t=6480,
+            mark_failed=_mark_failed,
+            emit=_emit,
+        )
+        return
 
     # Final ``done`` event tells the SSE consumer to close + show the CTA.
     await _emit(
@@ -1016,13 +1209,22 @@ async def _load_brief(run_id: str) -> BriefInput:
     """Read the brief JSON off the Run row and parse it through the
     Pydantic mirror. Pydantic enforces the same length bounds the web
     Zod schema uses, so a malformed row is caught here, not deeper in
-    the agent code."""
+    the agent code.
+
+    Retries transient Postgres errors (see :func:`with_db_retry`); a
+    permanently-missing row raises :class:`BriefMissingError` so the
+    push handler can ack-and-drop the poison message.
+    """
     sessionmaker = get_sessionmaker(_engine())
-    async with sessionmaker() as session:
-        row = await session.get(Run, run_id)
-        if row is None:
-            raise RuntimeError(f"run {run_id} disappeared mid-execution")
-        raw = row.brief_json or {}
+
+    async def _read() -> dict[str, Any]:
+        async with sessionmaker() as session:
+            row = await session.get(Run, run_id)
+            if row is None:
+                raise BriefMissingError(f"run {run_id} disappeared mid-execution")
+            return dict(row.brief_json or {})
+
+    raw = await with_db_retry(_read, op="load_brief")
     return BriefInput(
         brief=str(raw.get("brief", "")),
         guide=BriefGuide.model_validate(raw.get("guide") or {}),
@@ -1031,14 +1233,26 @@ async def _load_brief(run_id: str) -> BriefInput:
 
 async def _mark_failed(run_id: str) -> None:
     """Flip the run to `failed` so the dashboard reflects reality and
-    the user is eligible for a refund (Phase 4 wires the refund itself)."""
+    the user is eligible for a refund (Phase 4 wires the refund itself).
+
+    Retries transient Postgres errors so a single connection blip does
+    not leave the run stuck in ``running`` forever.
+    """
     sessionmaker = get_sessionmaker(_engine())
-    async with sessionmaker() as session:
-        row = await session.get(Run, run_id)
-        if row is not None:
-            row.status = RunStatus.failed
-            row.completed_at = datetime.now(UTC)
-            await session.commit()
+
+    async def _flip() -> None:
+        async with sessionmaker() as session:
+            row = await session.get(Run, run_id)
+            if row is not None and row.status not in (
+                RunStatus.failed,
+                RunStatus.refunded,
+                RunStatus.succeeded,
+            ):
+                row.status = RunStatus.failed
+                row.completed_at = datetime.now(UTC)
+                await session.commit()
+
+    await with_db_retry(_flip, op="mark_failed")
 
 
 async def _emit(run_id: str, event: dict[str, Any]) -> None:
@@ -1047,20 +1261,25 @@ async def _emit(run_id: str, event: dict[str, Any]) -> None:
     Postgres is the authoritative copy that survives Redis trimming. We
     write Postgres first; if Redis is down the run still completes and
     the durable log is intact, the SSE consumer just loses live tail.
+    The Postgres write retries transient infra errors before giving up.
     """
     sessionmaker = get_sessionmaker(_engine())
-    async with sessionmaker() as session:
-        session.add(
-            RunEvent(
-                run_id=run_id,
-                ts=datetime.now(UTC),
-                kind=str(event["kind"]),
-                # Persist the full wire-format event so a backfill query
-                # is just `SELECT payload_json FROM run_events …`.
-                payload_json=event,
+
+    async def _write() -> None:
+        async with sessionmaker() as session:
+            session.add(
+                RunEvent(
+                    run_id=run_id,
+                    ts=datetime.now(UTC),
+                    kind=str(event["kind"]),
+                    # Persist the full wire-format event so a backfill query
+                    # is just `SELECT payload_json FROM run_events …`.
+                    payload_json=event,
+                )
             )
-        )
-        await session.commit()
+            await session.commit()
+
+    await with_db_retry(_write, op="emit.persist")
     await redis_publish(run_id, event)
 
 

@@ -31,6 +31,7 @@ from tessar.observability import (
     init_observability,
     instrument_fastapi_app,
 )
+from tessar.runner import BriefMissingError, CrashRecoveryRefusal
 from tessar.runner import run as run_job
 
 log = structlog.get_logger(__name__)
@@ -65,6 +66,14 @@ class PubSubMessage(BaseModel):
 class PubSubEnvelope(BaseModel):
     message: PubSubMessage
     subscription: str | None = None
+    # ``deliveryAttempt`` is only present on subscriptions configured
+    # with a dead-letter topic. We use it to detect crash-recovery
+    # re-deliveries (see ``runner.run``'s docstring) and to gate the
+    # crash-recovery refusal logic so direct test calls (attempt=1)
+    # behave normally.
+    delivery_attempt: int | None = Field(default=None, alias="deliveryAttempt")
+
+    model_config = {"populate_by_name": True}
 
 
 class RunEnqueued(BaseModel):
@@ -95,17 +104,41 @@ async def pubsub_push(req: Request) -> None:
         log.warning("pubsub.bad_payload", error=str(exc), message_id=envelope.message.message_id)
         return
 
-    log.info("run.received", run_id=payload.runId, user_id=payload.userId)
+    log.info(
+        "run.received",
+        run_id=payload.runId,
+        user_id=payload.userId,
+        delivery_attempt=envelope.delivery_attempt or 1,
+        message_id=envelope.message.message_id,
+    )
     tracer = get_tracer("tessar.app")
     with tracer.start_as_current_span("tessar.run") as span:
         span.set_attribute("run.id", payload.runId)
         span.set_attribute("run.user_id", payload.userId)
+        span.set_attribute("run.delivery_attempt", envelope.delivery_attempt or 1)
         try:
-            await run_job(payload.runId)
+            await run_job(payload.runId, delivery_attempt=envelope.delivery_attempt or 1)
+        except BriefMissingError as exc:
+            # Poison message: the row vanished. Ack-and-drop so we
+            # don't loop forever — Sentry already saw it via the
+            # runner's capture_exception call.
+            log.warning("run.brief_missing_ack_drop", run_id=payload.runId, error=str(exc))
+            return
+        except CrashRecoveryRefusal as exc:
+            # Already handled (logged, captured, marked failed) inside
+            # the runner. Ack so Pub/Sub stops re-delivering.
+            log.warning("run.crash_recovery_ack_drop", run_id=payload.runId, error=str(exc))
+            return
         except Exception as exc:
             log.exception("run.failed", run_id=payload.runId, error=str(exc))
             span.record_exception(exc)
-            capture_exception(exc, run_id=payload.runId, user_id=payload.userId)
+            capture_exception(
+                exc,
+                run_id=payload.runId,
+                user_id=payload.userId,
+                delivery_attempt=str(envelope.delivery_attempt or 1),
+                classification="runner_uncaught",
+            )
             # 5xx → Pub/Sub redelivers (up to maxDeliveryAttempts → DLQ).
             raise HTTPException(status_code=500, detail="run_failed") from exc
 
