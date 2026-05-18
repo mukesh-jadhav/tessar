@@ -65,6 +65,29 @@ interface Props {
   hasMd: boolean;
   hasPdf: boolean;
   completedAt: string | null;
+  /** Extra audit data the page server-loaded from run_events (best-effort). */
+  auditExtras?: AuditExtras;
+}
+
+/** Server-loaded audit-tab extras (KB retrieval today; per-agent
+ *  cache_hit + prompt versions later, once the orchestrator emits
+ *  them as run_events). Kept in this component file to avoid a one-use
+ *  shared module — promote later when more surfaces consume it. */
+export interface AuditExtras {
+  retrieval: RetrievalAuditPayload | null;
+}
+
+export interface RetrievalAuditPayload {
+  at: string;
+  queryChars: number;
+  corpusSize: number;
+  topK: number;
+  hits: Array<{
+    kbId: string;
+    score: number;
+    bm25Rank: number | null;
+    vectorRank: number | null;
+  }>;
 }
 
 export function DecideViewer({
@@ -73,6 +96,7 @@ export function DecideViewer({
   hasMd,
   hasPdf,
   completedAt,
+  auditExtras,
 }: Props): React.ReactElement {
   const [section, setSection] = useState<Section>("verdict");
 
@@ -150,7 +174,12 @@ export function DecideViewer({
         ) : null}
         {section === "audit" ? (
           <>
-            <AuditSection pkg={pkg} runId={runId} completedLabel={completedLabel} />
+            <AuditSection
+              pkg={pkg}
+              runId={runId}
+              completedLabel={completedLabel}
+              extras={auditExtras}
+            />
             <SectionPager
               prev={{ label: "Risks", onClick: () => goTo(setSection, "risks") }}
               hint="You've reached the end. Download the PDF above to share."
@@ -791,10 +820,12 @@ function AuditSection({
   pkg,
   runId,
   completedLabel,
+  extras,
 }: {
   pkg: RunPackage;
   runId: string;
   completedLabel: string;
+  extras?: AuditExtras;
 }): React.ReactElement {
   return (
     <div className="space-y-6">
@@ -808,6 +839,8 @@ function AuditSection({
           <Field label="Decisions made" value={String(pkg.decisions.length)} />
         </dl>
       </Block>
+
+      {extras?.retrieval ? <RetrievalAuditBlock retrieval={extras.retrieval} /> : null}
 
       {pkg.assumptions.length ? (
         <Block
@@ -898,6 +931,83 @@ function Field({
         {value}
       </dd>
     </div>
+  );
+}
+
+/* ─── Retrieval audit (KB top-K + rank arms) ───────────────────── */
+
+/**
+ * Renders the most recent `retrieval` run_event's top-K so the reader
+ * can answer "which KB records did the synthesiser actually see, and
+ * how did each arm of the hybrid retriever rank them?" — the
+ * user-visible side of ADR-0017. Cache-hit / per-agent prompt-version
+ * surfacing will land in a follow-up once the orchestrator emits
+ * those as run_events.
+ */
+function RetrievalAuditBlock({
+  retrieval,
+}: {
+  retrieval: RetrievalAuditPayload;
+}): React.ReactElement {
+  return (
+    <Block
+      eyebrow="KB retrieval"
+      title={`Top-${retrieval.topK} of ${retrieval.corpusSize} KB records considered`}
+    >
+      <p className="text-on-surface-variant mb-3 max-w-2xl text-[13px] leading-relaxed">
+        Hybrid retrieval (BM25 + vector, fused with reciprocal-rank — see ADR-0017). Lower rank =
+        more relevant by that arm; — = the record was not returned by that arm. The score column is
+        the fused score the synthesiser ranked against.
+      </p>
+      <div className="border-outline-variant/60 overflow-x-auto rounded-xl border">
+        <table className="w-full border-collapse text-[12px]">
+          <thead>
+            <tr className="text-on-surface-variant border-outline-variant/60 border-b text-left">
+              <th className="px-3 py-2 font-medium">#</th>
+              <th className="px-3 py-2 font-medium">KB record</th>
+              <th className="px-3 py-2 text-right font-medium">Fused score</th>
+              <th className="px-3 py-2 text-right font-medium">BM25 rank</th>
+              <th className="px-3 py-2 text-right font-medium">Vector rank</th>
+            </tr>
+          </thead>
+          <tbody>
+            {retrieval.hits.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={5}
+                  className="text-on-surface-variant px-3 py-4 text-center text-[12px] italic"
+                >
+                  No KB records were returned for this run.
+                </td>
+              </tr>
+            ) : (
+              retrieval.hits.map((h, i) => (
+                <tr
+                  key={h.kbId}
+                  className="border-outline-variant/40 hover:bg-surface-container-low/60 border-b last:border-b-0"
+                >
+                  <td className="text-on-surface-variant px-3 py-2 tabular-nums">{i + 1}</td>
+                  <td className="px-3 py-2 font-mono text-[11px]">{h.kbId}</td>
+                  <td className="px-3 py-2 text-right font-mono tabular-nums">
+                    {h.score.toFixed(4)}
+                  </td>
+                  <td className="text-on-surface-variant px-3 py-2 text-right tabular-nums">
+                    {h.bm25Rank === null ? "—" : h.bm25Rank + 1}
+                  </td>
+                  <td className="text-on-surface-variant px-3 py-2 text-right tabular-nums">
+                    {h.vectorRank === null ? "—" : h.vectorRank + 1}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-on-surface-variant mt-3 text-[11px]">
+        Retrieved {new Date(retrieval.at).toLocaleString()} · query length {retrieval.queryChars}{" "}
+        chars.
+      </p>
+    </Block>
   );
 }
 
