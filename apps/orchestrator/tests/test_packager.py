@@ -882,3 +882,95 @@ def test_render_markdown_brief_appears_verbatim() -> None:
     pkg = package(**_good_inputs())
     md = render_markdown(pkg)
     assert "Build a B2B CRM for small EU sales teams." in md
+
+
+# --- PDF visual splice (ADR-0012) ------------------------------------
+
+
+def test_render_markdown_splices_pdf_visuals() -> None:
+    """`render_markdown` must embed the inline HTML/SVG visuals from
+    `_pdf_visuals` so the PDF artifact mirrors the `/decide/[id]` screen.
+    Per ADR-0012 this is the only thing keeping screen<->PDF parity
+    honest -- losing these splices silently regresses the deliverable.
+    """
+    pkg = package(**_good_inputs())
+    md = render_markdown(pkg)
+
+    # Decision summary strip (sits under ## Decisions, above per-decision H3s).
+    assert "Decision summary" in md, "decision strip missing from PDF markdown"
+
+    # Cost breakdown bar chart + cost trajectory line chart bracket the BOM table.
+    assert "Cost breakdown" in md, "cost breakdown widget missing"
+    assert "Cost trajectory" in md, "cost trajectory widget missing"
+    assert "<svg" in md, "expected at least one inline SVG (cost trajectory)"
+    assert "viewBox" in md, "cost trajectory SVG should declare a viewBox"
+
+    # Risk heatmap (3x3 severity x likelihood grid).
+    assert "Risk heatmap" in md, "risk heatmap missing"
+
+    # Build sequence timeline strip.
+    assert "Build sequence" in md, "build sequence header missing"
+    assert "phases" in md.lower(), "build timeline phase summary missing"
+
+
+def test_pdf_visuals_render_empty_safely() -> None:
+    """Each visual helper must return an empty string (not raise) when
+    given an empty input list. This is what lets `render_markdown` stay
+    a clean splice site without per-section None checks beyond
+    truthiness."""
+    from tessar.agents._pdf_visuals import (
+        build_timeline_html,
+        cost_breakdown_html,
+        cost_trajectory_svg,
+        decision_strip_html,
+        risk_heatmap_html,
+    )
+
+    assert cost_breakdown_html([]) == ""
+    assert cost_trajectory_svg([]) == ""
+    assert risk_heatmap_html([]) == ""
+    assert build_timeline_html([]) == ""
+    assert decision_strip_html([]) == ""
+
+
+def test_pdf_visuals_escape_user_data() -> None:
+    """Names/labels from `RunPackage` are user-influenced (they trace
+    back to the brief and to LLM output). They must be HTML-escaped
+    before being interpolated into the inline HTML widgets, or a hostile
+    brief could inject markup that breaks the PDF.
+    """
+    from tessar.agents._pdf_visuals import (
+        build_timeline_html,
+        cost_breakdown_html,
+    )
+    from tessar.schemas.run_package import PackageBomLine, PackageBuildPhase
+
+    bom = [
+        PackageBomLine.model_validate(
+            {
+                "id": "B-1",
+                "name": "<script>alert(1)</script>",
+                "kind": "compute",
+                "baseCost": 100.0,
+                "cite": 1,
+            }
+        )
+    ]
+    html = cost_breakdown_html(bom)
+    assert "<script>" not in html
+    assert "&lt;script&gt;" in html
+
+    phases = [
+        PackageBuildPhase.model_validate(
+            {
+                "id": "P-1",
+                "label": "<b>boom</b>",
+                "title": "phase 1",
+                "nodes": ["N-1"],
+                "rationale": "x",
+            }
+        )
+    ]
+    html = build_timeline_html(phases)
+    assert "<b>boom</b>" not in html
+    assert "&lt;b&gt;boom&lt;/b&gt;" in html

@@ -33,6 +33,13 @@ import uuid
 from collections.abc import Iterable
 from datetime import UTC, datetime
 
+from tessar.agents._pdf_visuals import (
+    build_timeline_html,
+    cost_breakdown_html,
+    cost_trajectory_svg,
+    decision_strip_html,
+    risk_heatmap_html,
+)
 from tessar.kb.types import KbRecord
 from tessar.schemas.architecture import (
     Architecture,
@@ -717,6 +724,13 @@ def render_markdown(pkg: RunPackage) -> str:
 
     lines.append("## Decisions")
     lines.append("")
+    # PDF-only summary table — at-a-glance scan of every pick before
+    # the per-decision rationales. Stripped to nothing if decisions are
+    # empty. The Markdown export keeps it too (it's just inline HTML).
+    _strip = decision_strip_html(pkg.decisions)
+    if _strip:
+        lines.append(_strip)
+        lines.append("")
     for d in pkg.decisions:
         lines.append(f"### {d.id} · {d.topic}: **{d.pick}**")
         lines.append("")
@@ -794,6 +808,17 @@ def render_markdown(pkg: RunPackage) -> str:
 
     lines.append("## Bill of materials (USD/month)")
     lines.append("")
+    # Visual cost breakdown + scale-sensitivity chart sit *above* the
+    # table so a skimming reader gets the shape of the bill before the
+    # line items. See ADR-0012 for the screen↔PDF visual-parity rule.
+    _breakdown = cost_breakdown_html(pkg.bom)
+    if _breakdown:
+        lines.append(_breakdown)
+        lines.append("")
+    _trajectory = cost_trajectory_svg(pkg.bom)
+    if _trajectory:
+        lines.append(_trajectory)
+        lines.append("")
     lines.append("| ID | Component | Kind | Baseline | Source |")
     lines.append("| --- | --- | --- | ---: | --- |")
     for b in pkg.bom:
@@ -802,6 +827,12 @@ def render_markdown(pkg: RunPackage) -> str:
 
     lines.append("## Risks")
     lines.append("")
+    # 3×3 severity × likelihood heatmap; severity literal is 3-level
+    # (low/med/high) so the grid is intentionally compact.
+    _heatmap = risk_heatmap_html(pkg.risks)
+    if _heatmap:
+        lines.append(_heatmap)
+        lines.append("")
     for r in pkg.risks:
         lines.append(
             f"### {r.id} · {r.title} _(severity {r.severity} · likelihood {r.likelihood})_"
@@ -832,6 +863,12 @@ def render_markdown(pkg: RunPackage) -> str:
     if pkg.build_sequence:
         lines.append("## Build sequence")
         lines.append("")
+        # Horizontal phase strip — matches the timeline component on
+        # /decide/[id]. Per-phase narrative follows below.
+        _timeline = build_timeline_html(pkg.build_sequence)
+        if _timeline:
+            lines.append(_timeline)
+            lines.append("")
         for i, p in enumerate(pkg.build_sequence, start=1):
             lines.append(f"### {p.id} · {p.label} — {p.title} (phase {i})")
             lines.append("")

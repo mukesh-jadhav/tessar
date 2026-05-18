@@ -1100,20 +1100,104 @@ def _render_pdf(md_body: str) -> bytes | None:
         return None
 
     html_body = md_lib.markdown(md_body, extensions=["fenced_code", "tables"])
+    # Editorial PDF stylesheet. Brand seed #137333 per ADR-0002.
+    # Mirrors the screen design language at /decide/[id] (serif headlines,
+    # tabular numerals, soft surface cards, brand accents) within the
+    # constraints of WeasyPrint's CSS subset. ADR-0012 commits us to
+    # keeping the printable deliverable visually coherent with the screen
+    # without ever server-rendering the React tree.
     html_doc = f"""<!doctype html>
 <html><head><meta charset="utf-8"><title>TESSAR package</title>
 <style>
-  @page {{ size: A4; margin: 22mm 18mm; }}
-  body {{ font-family: "Inter", "Segoe UI", sans-serif; color: #111;
-         font-size: 10.5pt; line-height: 1.55; }}
-  h1 {{ font-size: 22pt; margin: 0 0 12pt; }}
-  h2 {{ font-size: 14pt; margin: 18pt 0 6pt; }}
-  code, pre {{ font-family: "Cascadia Code", "Consolas", monospace;
-               background: #f4f4f6; border-radius: 4px; }}
-  pre {{ padding: 10pt; overflow-wrap: anywhere; }}
-  code {{ padding: 1pt 4pt; }}
-  blockquote {{ border-left: 3px solid #d4d4d8; margin: 0; padding: 2pt 12pt;
-                color: #555; font-style: italic; }}
+  @page {{
+    size: A4; margin: 20mm 18mm 24mm 18mm;
+    @bottom-right {{
+      content: "Page " counter(page) " of " counter(pages);
+      font-family: "Inter", "Segoe UI", sans-serif;
+      font-size: 8pt; color: #5F6368;
+    }}
+    @bottom-left {{
+      content: "TESSAR design package";
+      font-family: "Inter", "Segoe UI", sans-serif;
+      font-size: 8pt; color: #5F6368;
+      font-variant: small-caps; letter-spacing: 0.06em;
+    }}
+  }}
+  * {{ box-sizing: border-box; }}
+  body {{
+    font-family: "Inter", "Segoe UI", "Helvetica Neue", sans-serif;
+    color: #1F1F1F; font-size: 10pt; line-height: 1.55;
+    font-variant-numeric: tabular-nums lining-nums;
+  }}
+  h1, h2, h3, h4 {{
+    font-family: "Source Serif Pro", "Georgia", "Times New Roman", serif;
+    color: #1F1F1F; font-weight: 600; line-height: 1.2;
+  }}
+  h1 {{
+    font-size: 26pt; margin: 0 0 4pt; letter-spacing: -0.01em;
+    border-bottom: 2pt solid #137333; padding-bottom: 6pt;
+  }}
+  h2 {{
+    font-size: 16pt; margin: 22pt 0 8pt; padding-bottom: 4pt;
+    border-bottom: 1px solid #E8EAED;
+    page-break-after: avoid;
+  }}
+  h3 {{
+    font-size: 12pt; margin: 14pt 0 4pt;
+    color: #1F1F1F; page-break-after: avoid;
+  }}
+  h4 {{
+    font-size: 10.5pt; margin: 10pt 0 3pt; color: #5F6368;
+    font-variant: small-caps; letter-spacing: 0.05em; font-weight: 600;
+    page-break-after: avoid;
+  }}
+  p {{ margin: 0 0 8pt; }}
+  ul, ol {{ margin: 0 0 10pt; padding-left: 18pt; }}
+  li {{ margin: 2pt 0; }}
+  li > p {{ margin: 0 0 4pt; }}
+  strong {{ color: #1F1F1F; font-weight: 600; }}
+  em {{ color: #5F6368; }}
+  hr {{
+    border: none; border-top: 1px solid #E8EAED; margin: 18pt 0;
+  }}
+  a {{ color: #137333; text-decoration: none; }}
+  code, pre {{
+    font-family: "JetBrains Mono", "Cascadia Code", "Consolas", monospace;
+    background: #F8F9FA; border-radius: 3pt; font-size: 9pt;
+  }}
+  pre {{
+    padding: 10pt 12pt; overflow-wrap: anywhere; white-space: pre-wrap;
+    border: 1px solid #E8EAED; page-break-inside: avoid;
+    line-height: 1.45; color: #1F1F1F;
+  }}
+  code {{ padding: 1pt 4pt; color: #0B3C1F; }}
+  blockquote {{
+    border-left: 3px solid #137333;
+    margin: 10pt 0; padding: 6pt 14pt;
+    color: #5F6368; font-style: italic; background: #F2F8F4;
+    page-break-inside: avoid;
+  }}
+  table {{
+    width: 100%; border-collapse: collapse; margin: 6pt 0 12pt;
+    font-size: 9.5pt; page-break-inside: avoid;
+  }}
+  thead {{ display: table-header-group; }}
+  th {{
+    text-align: left; padding: 6pt 8pt;
+    background: #F2F8F4; color: #0B3C1F;
+    font-variant: small-caps; letter-spacing: 0.05em;
+    font-size: 8.5pt; font-weight: 600;
+    border-bottom: 1px solid #B7DFC4;
+  }}
+  td {{
+    padding: 5pt 8pt; border-bottom: 1px solid #E8EAED;
+    vertical-align: top; color: #1F1F1F;
+  }}
+  tr:nth-child(even) td {{ background: #FAFBFC; }}
+  /* The HTML widgets emitted by _pdf_visuals carry their own inline
+     styles; these rules just make sure they don't fight global resets. */
+  table table {{ font-size: inherit; }}
+  table table td, table table th {{ background: transparent; }}
 </style></head><body>{html_body}</body></html>"""
     try:
         return HTML(string=html_doc).write_pdf()
