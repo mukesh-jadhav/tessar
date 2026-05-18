@@ -15,6 +15,20 @@ export const LEGAL_COMPANY_NAME = "TESSAR";
 export const LEGAL_CONTACT_EMAIL = "legal@tessar.dev";
 export const LEGAL_LAST_UPDATED = "May 18, 2026";
 
+/**
+ * Version identifiers for the legal documents. Bump these ONLY when the
+ * substance of TERMS_SECTIONS / PRIVACY_SECTIONS changes (new clause,
+ * new sub-processor, new data use, changed liability cap). Cosmetic
+ * edits should not bump the version — we want re-consent friction to
+ * track actual changes, not typo fixes.
+ *
+ * Format: ISO date string. Stored verbatim in `terms_acceptances.terms_version`
+ * and `users.latest_terms_version` so the audit trail is self-describing.
+ * See ADR-0011 for the consent-capture strategy.
+ */
+export const TERMS_VERSION = "2026-05-18";
+export const PRIVACY_VERSION = "2026-05-18";
+
 /** One-line notice for compact surfaces (sticky bars, footers, tooltips). */
 export const DISCLAIMER_SHORT =
   "AI-generated architecture suggestions. Review with a qualified engineer before use.";

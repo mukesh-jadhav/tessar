@@ -34,9 +34,16 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts Account[]
-  sessions Session[]
-  runs     Run[]
+  // Denormalised pointer to the latest TermsAcceptance.termsVersion this
+  // user has consented to. Nullable for legacy rows; populated by the
+  // Auth.js createUser event for new signups and by /api/legal/accept
+  // when an existing user accepts an updated revision. See ADR-0011.
+  latestTermsVersion String? @map("latest_terms_version")
+
+  accounts          Account[]
+  sessions          Session[]
+  runs              Run[]
+  termsAcceptances  TermsAcceptance[]
 
   @@map("users")
 }
@@ -122,6 +129,10 @@ model Run {
   refundedAt                DateTime?     @map("refunded_at")
   // Snapshot of the KB used by this run, so audits can replay deterministically.
   kbSnapshotId              String?       @map("kb_snapshot_id")
+  // Snapshot of the Terms version the user agreed to when they paid for
+  // this run. Protects us if Terms change between runs — the bound
+  // contract is whatever was current at the payment moment. See ADR-0011.
+  termsVersionAtRun         String?       @map("terms_version_at_run")
   createdAt                 DateTime      @default(now()) @map("created_at")
   completedAt               DateTime?     @map("completed_at")
 
@@ -177,6 +188,36 @@ model RunArtifact {
 
   @@index([runId])
   @@map("run_artifacts")
+}
+
+// ---------------------------------------------------------------------------
+// Legal consent log (ADR-0011).
+//
+// Append-only record of every Terms/Privacy acceptance event. We log:
+//   - context: where the consent happened ("signup" | "checkout" | "reaccept")
+//   - the exact version strings displayed at that moment
+//   - the IP + user-agent for legal defensibility
+//
+// Reads use User.latestTermsVersion (denormalised) for the hot-path
+// "does this user need to re-consent?" check. Writes always go to both.
+// ---------------------------------------------------------------------------
+
+model TermsAcceptance {
+  id              String   @id @default(cuid())
+  userId          String   @map("user_id")
+  termsVersion    String   @map("terms_version")
+  privacyVersion  String   @map("privacy_version")
+  // Free-form string but expected values are "signup" | "checkout" | "reaccept".
+  // Not an enum so we can add new capture points without a migration.
+  context         String
+  ipAddress       String?  @map("ip_address")
+  userAgent       String?  @map("user_agent")
+  acceptedAt      DateTime @default(now()) @map("accepted_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, acceptedAt(sort: Desc)])
+  @@map("terms_acceptances")
 }
 
 // ---------------------------------------------------------------------------

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
+import { TermsConsentBanner } from "@/components/legal/terms-consent-banner";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "@/components/shell/user-menu";
 
@@ -108,6 +109,8 @@ export function AppShell({
           </div>
         </nav>
       </header>
+
+      <TermsConsentBanner />
 
       {children}
 

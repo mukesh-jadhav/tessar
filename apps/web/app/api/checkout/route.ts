@@ -25,6 +25,8 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
+import { recordConsent } from "@/lib/legal-consent";
+import { TERMS_VERSION } from "@/lib/legal";
 import { enqueueRun } from "@/lib/runs/enqueue";
 import { getReturnBaseUrl, getStripe } from "@/lib/stripe";
 
@@ -65,6 +67,7 @@ export async function POST(req: Request): Promise<NextResponse> {
       priceCents: true,
       stripeCheckoutSessionId: true,
       briefJson: true,
+      termsVersionAtRun: true,
     },
   });
   if (!run) return NextResponse.json({ error: "not_found" }, { status: 404 });
@@ -76,6 +79,32 @@ export async function POST(req: Request): Promise<NextResponse> {
   }
   if (run.paymentStatus === "refunded") {
     return NextResponse.json({ error: "refunded" }, { status: 409 });
+  }
+
+  // ── Consent capture (ADR-0011) ──────────────────────────────────
+  // The /checkout page shows "By starting this run you agree to..." right
+  // above the Continue-to-payment button. Reaching this handler IS the
+  // acceptance. Stamp the Run with the bound contract version and log a
+  // TermsAcceptance row before we hand off to Stripe / the worker. Wrap
+  // in try/catch so consent-log issues never block a paid run — the
+  // run's own termsVersionAtRun stamp is the legal anchor.
+  if (!run.termsVersionAtRun) {
+    try {
+      await prisma.run.update({
+        where: { id: run.id },
+        data: { termsVersionAtRun: TERMS_VERSION },
+      });
+      await recordConsent({
+        userId,
+        context: "checkout",
+        headers: req.headers,
+      });
+    } catch (err) {
+      console.error("[/api/checkout] consent capture failed", {
+        runId: run.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   // ── Billing-disabled bypass ────────────────────────────────────────────

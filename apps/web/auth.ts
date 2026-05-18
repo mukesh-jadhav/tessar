@@ -22,6 +22,7 @@ import Nodemailer from "next-auth/providers/nodemailer";
 
 import { authConfig } from "./auth.config";
 import { prisma } from "./lib/db";
+import { recordConsent } from "./lib/legal-consent";
 
 const smtpHost = process.env.SMTP_HOST ?? "localhost";
 const smtpPort = Number(process.env.SMTP_PORT ?? 1025);
@@ -59,4 +60,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
     }),
   ],
+  events: {
+    /**
+     * Capture the click-wrap acceptance from /signin as a durable record
+     * the moment the adapter inserts the user row. The /signin page shows
+     * the "By signing in you agree to..." line above the auth controls,
+     * so completing the flow IS the acceptance. We don't have request
+     * headers here (events run server-side after adapter callbacks), so
+     * IP/UA are stored as NULL — the existence of the row + the version
+     * string is what the audit relies on. See ADR-0011.
+     */
+    async createUser({ user }): Promise<void> {
+      if (!user.id) return;
+      try {
+        await recordConsent({ userId: user.id, context: "signup" });
+      } catch (err) {
+        // Never let consent logging block sign-up. The re-consent banner
+        // will catch up the user on next page load if this fails.
+        console.error("[auth.events.createUser] recordConsent failed", {
+          userId: user.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    },
+  },
 });

@@ -198,6 +198,14 @@ export default function CheckoutPage(): React.ReactElement {
               Secure payment via <span className="text-on-surface font-semibold">Stripe</span>. You
               can request a refund if the package fails our citation bar.
             </p>
+            <p className="text-on-surface-variant text-center text-[10.5px] leading-relaxed">
+              By starting this run you agree to our{" "}
+              <Link href="/terms" className="text-primary hover:underline">
+                Terms
+              </Link>{" "}
+              and acknowledge that recommendations are AI-generated research and require
+              professional review before production use.
+            </p>
           </aside>
         </motion.section>
       </main>

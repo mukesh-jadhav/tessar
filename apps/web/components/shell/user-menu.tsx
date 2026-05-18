@@ -150,6 +150,17 @@ export function UserMenu(): React.ReactElement | null {
               </span>
               Billing &amp; invoices
             </Link>
+            <Link
+              href="/account"
+              role="menuitem"
+              onClick={(): void => setOpen(false)}
+              className="text-on-surface hover:bg-on-surface/[0.04] flex items-center gap-2 px-4 py-2 text-[12.5px]"
+            >
+              <span aria-hidden className="text-on-surface-variant">
+                ◐
+              </span>
+              Account &amp; legal
+            </Link>
           </div>
 
           <form action={signOutAction} className="border-outline-variant/60 border-t">
