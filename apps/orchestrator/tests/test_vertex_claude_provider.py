@@ -148,6 +148,30 @@ def test_classify_not_found_is_transient() -> None:
     assert _classify_error(PermissionDeniedError("aiplatform.endpoints.predict denied")) is True
 
 
+def test_classify_bad_request_region_unavailable_is_transient() -> None:
+    """Vertex surfaces "model not in this region" as 400 FAILED_PRECONDITION
+    (BadRequestError), not 404. Run cmpb9cl died on this exact path because
+    claude-sonnet-4-5 isn't published in us-central1. Must fall over to
+    Gemini Pro (ADR-0015) instead of killing the run."""
+
+    class BadRequestError(Exception):
+        pass
+
+    assert (
+        _classify_error(
+            BadRequestError(
+                "Error code: 400 - Publisher Model "
+                "`projects/x/locations/us-central1/publishers/anthropic/"
+                "models/claude-sonnet-4-5@20250929` is not servable in "
+                "region us-central1. status: FAILED_PRECONDITION"
+            )
+        )
+        is True
+    )
+    # A genuine 400 (malformed payload) must still bubble up loudly.
+    assert _classify_error(BadRequestError("messages: field required")) is False
+
+
 # ─── generate() — with mocked Anthropic SDK ──────────────────────
 
 

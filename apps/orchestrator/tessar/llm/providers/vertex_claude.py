@@ -72,6 +72,19 @@ _TRANSIENT_NAMES = {
 }
 _TRANSIENT_STATUS = {429, 500, 502, 503, 504}
 
+# Vertex-side "permanent for THIS provider, but the router has Gemini Pro
+# as a documented Tier-A fallback (ADR-0015)" hints. These ride on a
+# BadRequestError (400 FAILED_PRECONDITION) when the model isn't published
+# in the configured region (e.g. claude-sonnet-4-5 is not in us-central1),
+# or on a NotFoundError dressed up as 400 by the Vertex front door. They
+# must fall over instead of killing the run.
+_PROVIDER_UNAVAILABLE_HINTS = (
+    "is not servable",
+    "FAILED_PRECONDITION",
+    "Publisher Model",
+    "was not found",
+)
+
 
 def _lazy_import() -> Any:
     """Import the Anthropic Vertex SDK on first use."""
@@ -89,6 +102,13 @@ def _classify_error(exc: BaseException) -> bool:
     """True if the exception should be treated as transient (router falls
     over to the next provider in the chain)."""
     name = type(exc).__name__
+    # Vertex sometimes surfaces "model/region not available" as a 400
+    # FAILED_PRECONDITION (BadRequestError) rather than a clean 404. Detect
+    # by message substring so any Anthropic SDK exception class signaling
+    # provider-unavailability falls over instead of killing the run.
+    msg = str(exc)
+    if any(hint in msg for hint in _PROVIDER_UNAVAILABLE_HINTS):
+        return True
     if name not in _TRANSIENT_NAMES:
         return False
     # APIStatusError covers both retriable (5xx, 429) and non-retriable

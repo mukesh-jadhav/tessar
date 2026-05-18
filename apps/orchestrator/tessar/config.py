@@ -47,6 +47,13 @@ class Settings(BaseSettings):
     # deterministic MockLlmProvider so dev / CI work without cloud creds.
     vertex_project: str | None = Field(default=None, alias="VERTEX_PROJECT")
     vertex_location: str = Field(default="asia-south1", alias="VERTEX_LOCATION")
+    # Claude Sonnet 4.5 is published on Vertex in a different region set
+    # than Gemini (us-east5 / europe-west1 / europe-west4 / asia-southeast1
+    # — NOT us-central1 / asia-south1). Override the location used by the
+    # Anthropic provider here so the rest of Vertex (Gemini, embeddings)
+    # can stay regional-cheap while Claude calls go where they're served.
+    # See ADR-0015 + run cmpb9cl post-mortem.
+    vertex_claude_location: str = Field(default="us-east5", alias="VERTEX_CLAUDE_LOCATION")
 
     # OpenAI direct API key — last-resort fallback per ADR-0015. Only wired
     # into the router when set (Secret Manager in prod). When unset, the

@@ -171,6 +171,6 @@ jobs:
             --project "$PROJECT_ID" \
             --region "$REGION" \
             --image "$ORCH_IMAGE" \
-            --update-env-vars "PUBSUB_AUDIENCE=$ORCH_URI,GOOGLE_CLOUD_PROJECT=$PROJECT_ID,VERTEX_PROJECT=$PROJECT_ID,VERTEX_LOCATION=us-central1,OTEL_ENABLED=true,OTEL_SERVICE_NAME=tessar-orchestrator,SENTRY_ENVIRONMENT=dev,SENTRY_RELEASE=$IMAGE_TAG" \
+            --update-env-vars "PUBSUB_AUDIENCE=$ORCH_URI,GOOGLE_CLOUD_PROJECT=$PROJECT_ID,VERTEX_PROJECT=$PROJECT_ID,VERTEX_LOCATION=us-central1,VERTEX_CLAUDE_LOCATION=us-east5,OTEL_ENABLED=true,OTEL_SERVICE_NAME=tessar-orchestrator,SENTRY_ENVIRONMENT=dev,SENTRY_RELEASE=$IMAGE_TAG" \
             --update-secrets "SENTRY_DSN=sentry-dsn-worker:latest" \
             --quiet

@@ -52,7 +52,7 @@ def _build_provider_chain() -> list[LlmProvider]:
             chain.append(
                 VertexClaudeProvider(
                     project=settings.vertex_project,
-                    location=settings.vertex_location,
+                    location=settings.vertex_claude_location,
                     # Default `supported_tiers={Tier.A}` — Claude only
                     # serves Tier-A. Tier-B/C falls through to Gemini.
                 )
