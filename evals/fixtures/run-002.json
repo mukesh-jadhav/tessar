@@ -1,0 +1,163 @@
+{
+  "_comment": "Fixture for scenario 002 — real-time portfolio feed for retail investors (India, 3-eng team).",
+  "id": "fixture-002",
+  "generatedAt": "2026-05-17T12:00:00Z",
+  "kbSnapshotId": "kb-fixture",
+  "brief": "Mobile real-time portfolio feed for retail investors. 5k→250k users (India). Sub-2s push; brokerage OAuth.",
+  "requirements": [
+    { "id": "r1", "label": "Realtime", "value": "sub-2s push of price updates", "source": "brief" },
+    { "id": "r2", "label": "Push notifications", "value": "FCM + APNs", "source": "brief" },
+    {
+      "id": "r3",
+      "label": "Token storage",
+      "value": "KMS-encrypted OAuth refresh tokens",
+      "source": "brief"
+    },
+    {
+      "id": "r4",
+      "label": "News digest",
+      "value": "LLM-summarised per ticker, cached",
+      "source": "brief"
+    },
+    { "id": "r5", "label": "Region", "value": "asia-south1", "source": "brief" }
+  ],
+  "nodes": [
+    { "id": "gw", "label": "Ably (managed realtime)", "cite": 1 },
+    { "id": "app", "label": "Cloud Run (asia-south1)", "cite": 2 },
+    { "id": "db", "label": "Cloud SQL Postgres", "cite": 3 },
+    { "id": "cache", "label": "Memorystore Redis", "cite": 4 },
+    { "id": "kms", "label": "Cloud KMS + Secret Manager (OAuth tokens)", "cite": 5 },
+    { "id": "llm", "label": "Vertex AI Gemini (news digest, cached)", "cite": 6 },
+    { "id": "push", "label": "Firebase Cloud Messaging + APNs", "cite": 7 }
+  ],
+  "decisions": [
+    {
+      "id": "d1",
+      "topic": "Realtime transport",
+      "pick": "Ably",
+      "vs": "vs Pub/Sub + WebSocket gateway · Pusher · self-managed Kafka",
+      "why": "managed fan-out at sub-2s, no SRE overhead for 3-engineer team; Kafka explicitly ruled out by brief",
+      "conf": "high",
+      "cite": 1,
+      "reversibility": "2-way",
+      "blastRadius": "platform",
+      "revisitAt": "if per-user fan-out cost exceeds 15% of monthly infra"
+    },
+    {
+      "id": "d2",
+      "topic": "OAuth-token storage",
+      "pick": "Cloud KMS-encrypted column + Secret Manager rotation",
+      "vs": "vs plaintext Postgres · Vault self-managed",
+      "why": "satisfies must-have audit + KMS encryption; rotates without operator burden",
+      "conf": "high",
+      "cite": 5,
+      "reversibility": "2-way",
+      "blastRadius": "data",
+      "revisitAt": "if RBI compliance audit asks for HSM"
+    },
+    {
+      "id": "d3",
+      "topic": "News summarisation",
+      "pick": "Gemini Flash + per-ticker Redis cache (1h TTL)",
+      "vs": "vs per-request LLM call · pre-compute all tickers",
+      "why": "brief forbids synchronous LLM on every fetch; cache hit-rate justified by long-tail ticker reads",
+      "conf": "high",
+      "cite": 6,
+      "reversibility": "2-way",
+      "blastRadius": "platform",
+      "revisitAt": "if cache hit-rate < 60%"
+    }
+  ],
+  "bom": [
+    { "id": "b1", "name": "Ably", "kind": "vendor", "baseCost": 600.0, "cite": 1 },
+    { "id": "b2", "name": "Cloud Run", "kind": "compute", "baseCost": 200.0, "cite": 2 },
+    { "id": "b3", "name": "Cloud SQL Postgres", "kind": "data", "baseCost": 180.0, "cite": 3 },
+    { "id": "b4", "name": "Memorystore Redis", "kind": "data", "baseCost": 110.0, "cite": 4 },
+    {
+      "id": "b5",
+      "name": "Cloud KMS + Secret Manager",
+      "kind": "vendor",
+      "baseCost": 25.0,
+      "cite": 5
+    },
+    { "id": "b6", "name": "Vertex AI Gemini", "kind": "vendor", "baseCost": 250.0, "cite": 6 },
+    { "id": "b7", "name": "FCM + APNs", "kind": "network", "baseCost": 0.0, "cite": 7 }
+  ],
+  "risks": [
+    {
+      "id": "k1",
+      "title": "Brokerage OAuth token leak via log scraping",
+      "severity": "high",
+      "likelihood": "low",
+      "mitigation": "KMS encryption at rest; redact token claims from logs; audit log of every decrypt",
+      "cite": 5
+    },
+    {
+      "id": "k2",
+      "title": "Realtime fan-out cost spikes at 50k+ DAU",
+      "severity": "med",
+      "likelihood": "med",
+      "mitigation": "throttle low-priority channels; coalesce updates >1/sec per ticker; watch Ably bill weekly",
+      "cite": 1
+    },
+    {
+      "id": "k3",
+      "title": "LLM news summaries hallucinate price-relevant facts",
+      "severity": "high",
+      "likelihood": "med",
+      "mitigation": "prompt forces extractive summary with source-quote; reject summaries that introduce numerals not present in source",
+      "cite": 6
+    }
+  ],
+  "sources": [
+    {
+      "id": 1,
+      "title": "Ably pricing + realtime SLA",
+      "publisher": "Ably",
+      "url": "https://ably.com/pricing",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 2,
+      "title": "Cloud Run asia-south1 availability",
+      "publisher": "GCP",
+      "url": "https://cloud.google.com/run/docs/locations",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 3,
+      "title": "Cloud SQL Postgres pricing",
+      "publisher": "GCP",
+      "url": "https://cloud.google.com/sql/pricing",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 4,
+      "title": "Memorystore Redis pricing",
+      "publisher": "GCP",
+      "url": "https://cloud.google.com/memorystore/docs/redis/pricing",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 5,
+      "title": "Cloud KMS docs",
+      "publisher": "GCP",
+      "url": "https://cloud.google.com/kms/docs",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 6,
+      "title": "Vertex AI Gemini pricing",
+      "publisher": "GCP",
+      "url": "https://cloud.google.com/vertex-ai/pricing",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 7,
+      "title": "FCM docs",
+      "publisher": "Firebase",
+      "url": "https://firebase.google.com/docs/cloud-messaging",
+      "verifiedAt": "2026-05-01"
+    }
+  ]
+}

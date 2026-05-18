@@ -1,0 +1,144 @@
+{
+  "_comment": "Fixture for scenario 003 — hyperlocal home-services marketplace MVP, India, 10-week ship.",
+  "id": "fixture-003",
+  "generatedAt": "2026-05-17T12:00:00Z",
+  "kbSnapshotId": "kb-fixture",
+  "brief": "Two-sided hyperlocal home-services marketplace MVP across 5 Indian Tier-2 cities; 10-week ship; UPI-first.",
+  "requirements": [
+    { "id": "r1", "label": "Ship window", "value": "10 weeks", "source": "brief" },
+    { "id": "r2", "label": "Region", "value": "asia-south1", "source": "brief" },
+    { "id": "r3", "label": "Payments", "value": "Razorpay (UPI native)", "source": "brief" },
+    { "id": "r4", "label": "Mobile", "value": "React Native via Expo", "source": "brief" },
+    { "id": "r5", "label": "Admin", "value": "Retool for moderation + disputes", "source": "brief" }
+  ],
+  "nodes": [
+    { "id": "app", "label": "Cloud Run (monolith, asia-south1)", "cite": 1 },
+    { "id": "db", "label": "Cloud SQL Postgres + PostGIS", "cite": 2 },
+    { "id": "pay", "label": "Razorpay (escrow capture/release)", "cite": 3 },
+    { "id": "push", "label": "Firebase Cloud Messaging", "cite": 4 },
+    { "id": "admin", "label": "Retool (founders' admin)", "cite": 5 },
+    { "id": "mobile", "label": "Expo (React Native)", "cite": 6 }
+  ],
+  "decisions": [
+    {
+      "id": "d1",
+      "topic": "Backend shape",
+      "pick": "Postgres + Cloud Run monolith",
+      "vs": "vs microservices · GraphQL federation",
+      "why": "10-week ship + non-technical founders rule out anything but the simplest shape; brief explicitly forbids microservices",
+      "conf": "high",
+      "cite": 1,
+      "reversibility": "2-way",
+      "blastRadius": "platform",
+      "revisitAt": "if 50k+ MAU sustained for 3 months"
+    },
+    {
+      "id": "d2",
+      "topic": "Payments",
+      "pick": "Razorpay",
+      "vs": "vs Stripe India · Cashfree · custom",
+      "why": "UPI is first-class; escrow via Razorpay Route; INR settlement; native PG for India",
+      "conf": "high",
+      "cite": 3,
+      "reversibility": "2-way",
+      "blastRadius": "platform",
+      "revisitAt": "if expansion outside India"
+    },
+    {
+      "id": "d3",
+      "topic": "Internal admin tool",
+      "pick": "Retool",
+      "vs": "vs custom Next.js admin · Forest Admin",
+      "why": "founder-built moderation flows in days, not weeks; SQL-backed; cheap at this scale",
+      "conf": "high",
+      "cite": 5,
+      "reversibility": "2-way",
+      "blastRadius": "platform",
+      "revisitAt": "if Retool seat count > 5 or workflows outgrow drag-drop"
+    }
+  ],
+  "bom": [
+    { "id": "b1", "name": "Cloud Run", "kind": "compute", "baseCost": 40.0, "cite": 1 },
+    { "id": "b2", "name": "Cloud SQL Postgres", "kind": "data", "baseCost": 60.0, "cite": 2 },
+    {
+      "id": "b3",
+      "name": "Razorpay (gateway fees)",
+      "kind": "vendor",
+      "baseCost": 80.0,
+      "cite": 3
+    },
+    { "id": "b4", "name": "FCM", "kind": "network", "baseCost": 0.0, "cite": 4 },
+    { "id": "b5", "name": "Retool", "kind": "vendor", "baseCost": 50.0, "cite": 5 },
+    { "id": "b6", "name": "Expo EAS", "kind": "vendor", "baseCost": 30.0, "cite": 6 }
+  ],
+  "risks": [
+    {
+      "id": "k1",
+      "title": "Escrow-release dispute backlog overwhelms 2 founders",
+      "severity": "high",
+      "likelihood": "high",
+      "mitigation": "auto-release T+72h post-job-completed unless customer disputes; Retool queue with SLA timer",
+      "cite": 3
+    },
+    {
+      "id": "k2",
+      "title": "Pro side fraud — fake job acceptance + no-show",
+      "severity": "med",
+      "likelihood": "med",
+      "mitigation": "geofenced check-in at customer location; auto-flag if no GPS event 30min after accept",
+      "cite": 1
+    },
+    {
+      "id": "k3",
+      "title": "10-week deadline slip from scope creep on map UX",
+      "severity": "med",
+      "likelihood": "high",
+      "mitigation": "live-tracking is in nice_to_have, defer to v1.1; ship with slot booking only",
+      "cite": 6
+    }
+  ],
+  "sources": [
+    {
+      "id": 1,
+      "title": "Cloud Run asia-south1",
+      "publisher": "GCP",
+      "url": "https://cloud.google.com/run/docs/locations",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 2,
+      "title": "Cloud SQL Postgres + PostGIS",
+      "publisher": "GCP",
+      "url": "https://cloud.google.com/sql/docs/postgres/extensions",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 3,
+      "title": "Razorpay Route (escrow)",
+      "publisher": "Razorpay",
+      "url": "https://razorpay.com/docs/payments/route/",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 4,
+      "title": "FCM docs",
+      "publisher": "Firebase",
+      "url": "https://firebase.google.com/docs/cloud-messaging",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 5,
+      "title": "Retool pricing",
+      "publisher": "Retool",
+      "url": "https://retool.com/pricing",
+      "verifiedAt": "2026-05-01"
+    },
+    {
+      "id": 6,
+      "title": "Expo EAS pricing",
+      "publisher": "Expo",
+      "url": "https://expo.dev/pricing",
+      "verifiedAt": "2026-05-01"
+    }
+  ]
+}
