@@ -22,6 +22,9 @@ dependencies = [
     # Vertex AI Anthropic (Claude Sonnet 4.5) — Tier-A primary per ADR-0015.
     # The `vertex` extra pulls google-auth so AnthropicVertex picks up ADC.
     "anthropic[vertex]>=0.40.0",
+    # OpenAI direct — last-resort fallback for all tiers per ADR-0015.
+    # Only activated when OPENAI_API_KEY is set.
+    "openai>=1.50.0",
     "python-dotenv>=1.0.1",
     "redis>=5.2.0",
     "markdown>=3.7",

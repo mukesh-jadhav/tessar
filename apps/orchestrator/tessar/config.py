@@ -48,6 +48,14 @@ class Settings(BaseSettings):
     vertex_project: str | None = Field(default=None, alias="VERTEX_PROJECT")
     vertex_location: str = Field(default="asia-south1", alias="VERTEX_LOCATION")
 
+    # OpenAI direct API key — last-resort fallback per ADR-0015. Only wired
+    # into the router when set (Secret Manager in prod). When unset, the
+    # chain ends at Vertex Gemini.
+    openai_api_key: str | None = Field(default=None, alias="OPENAI_API_KEY")
+    # Optional base_url override for OpenAI-compatible gateways (Azure
+    # OpenAI, OpenRouter, etc.). Leave unset for the public OpenAI API.
+    openai_base_url: str | None = Field(default=None, alias="OPENAI_BASE_URL")
+
     # Hard per-run ceilings — router raises BudgetExceeded if breached.
     # Bumped from $0.50 → $0.85 per ADR-0015 (Claude Sonnet 4.5 Tier-A).
     # Derivation: 3 Tier-A calls × ~$0.21/call (30k in + 8k out @ Sonnet 4.5

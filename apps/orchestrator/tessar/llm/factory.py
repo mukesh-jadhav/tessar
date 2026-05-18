@@ -74,7 +74,21 @@ def _build_provider_chain() -> list[LlmProvider]:
         except Exception as e:  # SDK missing, auth failure, etc.
             log.warning("llm.vertex_gemini_unavailable err=%s", e)
 
-    # TODO Phase 3.4: OpenAI direct provider (last-resort fallback for all tiers)
+    # 3. OpenAI direct — last-resort fallback for all tiers (ADR-0015).
+    #    Only wired when the API key is configured (Secret Manager in prod).
+    if settings.openai_api_key:
+        try:
+            from .providers.openai_direct import OpenAIDirectProvider
+
+            chain.append(
+                OpenAIDirectProvider(
+                    api_key=settings.openai_api_key,
+                    base_url=settings.openai_base_url,
+                    # Default supported_tiers={A,B,C} — fallback for everyone.
+                )
+            )
+        except Exception as e:  # SDK missing, auth failure, etc.
+            log.warning("llm.openai_direct_unavailable err=%s", e)
 
     if not chain:
         # Dev / CI default: deterministic mock so the run loop works
