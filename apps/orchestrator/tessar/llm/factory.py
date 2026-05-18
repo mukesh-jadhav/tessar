@@ -24,6 +24,7 @@ import logging
 from tessar.config import settings
 
 from .budget import BudgetTracker
+from .cache import PromptCache, build_prompt_cache
 from .providers.base import LlmProvider
 from .providers.mock import MockLlmProvider
 from .router import LlmRouter
@@ -100,11 +101,31 @@ def _build_provider_chain() -> list[LlmProvider]:
     return chain
 
 
-def build_router() -> LlmRouter:
+def build_router(
+    *,
+    kb_snapshot_id: str | None = None,
+    cache: PromptCache | None = None,
+) -> LlmRouter:
     """Construct one router for one run. The budget tracker is per-run
-    so each run gets a fresh ceiling."""
+    so each run gets a fresh ceiling.
+
+    `kb_snapshot_id` participates in every cache key, so a KB refresh
+    naturally invalidates stale cached answers. Pass the snapshot id
+    that was used to build the retrieval context for this run.
+
+    `cache` overrides the default `build_prompt_cache()` (Redis when
+    `REDIS_URL` is set, else in-process LRU). Tests pass a
+    `MemoryPromptCache` directly; production passes nothing and gets the
+    Redis-backed default.
+    """
     budget = BudgetTracker(
         cap_usd=settings.llm_cap_usd_per_run,
         cap_tokens=settings.llm_cap_tokens_per_run,
     )
-    return LlmRouter(_build_provider_chain(), budget)
+    resolved_cache = cache if cache is not None else build_prompt_cache()
+    return LlmRouter(
+        _build_provider_chain(),
+        budget,
+        cache=resolved_cache,
+        kb_snapshot_id=kb_snapshot_id,
+    )

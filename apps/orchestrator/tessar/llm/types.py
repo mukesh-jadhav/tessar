@@ -58,3 +58,7 @@ class LlmResponse(BaseModel):
     model: str
     tier: Tier
     usage: LlmUsage
+    cache_hit: bool = False
+    """True iff this response was served from the prompt cache (see
+    `tessar/llm/cache.py`). When True, `usage.cost_usd` is zero — the
+    original call was billed once; replays are free."""

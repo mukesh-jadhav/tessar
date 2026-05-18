@@ -603,6 +603,15 @@ async def run(run_id: str, *, delivery_attempt: int = 1) -> None:
     _retriever = HybridRetriever(records=_all_kb, embedder=build_embedder())
     _retrieval_hits = _retriever.retrieve(_retrieval_query, top_k=20)
     kb_candidates = [h.record for h in _retrieval_hits]
+
+    # Tell the router which KB snapshot id to bind subsequent cache
+    # entries to. KB-aware Tier-A agents (synthesizer/architect/cost/risk)
+    # below will key their cache by this id, so a KB refresh naturally
+    # invalidates their cached responses without a manual flush.
+    from tessar.agents.packager import _derive_snapshot_id
+
+    _kb_snapshot_id = _derive_snapshot_id(kb_candidates)
+    router.set_kb_snapshot_id(_kb_snapshot_id)
     await _emit(
         run_id,
         {

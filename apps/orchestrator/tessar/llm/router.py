@@ -29,6 +29,13 @@ from concurrent.futures import TimeoutError as FuturesTimeoutError
 from typing import TYPE_CHECKING
 
 from .budget import BudgetExceeded, BudgetTracker
+from .cache import (
+    CACHE_TEMPERATURE_CEILING,
+    DEFAULT_TTL_SECONDS,
+    PromptCache,
+    build_cache_key,
+    materialize_hit,
+)
 from .providers.base import LlmProvider, TransientProviderError
 from .tier_policy import tier_for
 from .types import LlmMessage, LlmResponse, Tier
@@ -64,12 +71,22 @@ class LlmRouter:
         budget: BudgetTracker,
         *,
         provider_timeout_s: dict[Tier, float] | None = None,
+        cache: PromptCache | None = None,
+        kb_snapshot_id: str | None = None,
+        cache_ttl_seconds: int = DEFAULT_TTL_SECONDS,
     ) -> None:
         if not providers:
             raise ValueError("LlmRouter requires at least one provider")
         self._providers = list(providers)
         self._budget = budget
         self._timeouts = provider_timeout_s or DEFAULT_PROVIDER_TIMEOUT_S
+        # Cache + KB snapshot id are per-router rather than per-call so
+        # individual agents don't have to thread them through their own
+        # signatures. The KB snapshot id is part of every cache key, so
+        # any KB update naturally invalidates stale answers.
+        self._cache = cache
+        self._kb_snapshot_id = kb_snapshot_id
+        self._cache_ttl_seconds = cache_ttl_seconds
         # One executor per router; a router lives for one run, so the
         # executor disappears with it. We allow a few worker threads so
         # that a hung call (which we abandon at the timeout) does not
@@ -81,6 +98,22 @@ class LlmRouter:
     @property
     def budget(self) -> BudgetTracker:
         return self._budget
+
+    @property
+    def kb_snapshot_id(self) -> str | None:
+        return self._kb_snapshot_id
+
+    def set_kb_snapshot_id(self, kb_snapshot_id: str | None) -> None:
+        """Set the KB snapshot id used in cache keys for subsequent calls.
+
+        The runner constructs the router before the KB is loaded (intake
+        + requirements_extractor + research_planner all run first and
+        don't read KB), then sets the snapshot id once retrieval has
+        chosen candidates. KB-aware agents (synthesizer, architect,
+        cost_estimator, risk_writer) get snapshot-bound cache keys; the
+        upstream agents cache with snapshot_id="" which is fine — their
+        outputs are KB-agnostic by construction."""
+        self._kb_snapshot_id = kb_snapshot_id
 
     def generate(
         self,
@@ -94,6 +127,31 @@ class LlmRouter:
         """Dispatch one completion. `tier` overrides the tier-policy lookup."""
         resolved_tier = tier or tier_for(agent_name)
         prompt_tokens = _approx_prompt_tokens(messages)
+
+        # Cache lookup BEFORE budget pre-check: hits are free and should
+        # not block on a near-exhausted budget. Caching is skipped above
+        # the temperature ceiling — creative calls must not be deterministic.
+        cache_key: str | None = None
+        if self._cache is not None and temperature <= CACHE_TEMPERATURE_CEILING:
+            cache_key = build_cache_key(
+                messages,
+                agent_name=agent_name,
+                tier=resolved_tier,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                kb_snapshot_id=self._kb_snapshot_id,
+            )
+            cached = self._cache.get(cache_key)
+            if cached is not None:
+                hit = materialize_hit(cached)
+                log.info(
+                    "llm.cache_hit agent=%s tier=%s provider=%s model=%s",
+                    agent_name,
+                    resolved_tier.value,
+                    hit.provider,
+                    hit.model,
+                )
+                return hit
 
         candidates = [p for p in self._providers if p.supports(resolved_tier)]
         if not candidates:
@@ -154,6 +212,13 @@ class LlmRouter:
                 response.usage.total_tokens,
                 response.usage.cost_usd,
             )
+
+            # Best-effort cache store. Failures are logged in the backend
+            # and never bubble — caching is a cost optimization, never a
+            # correctness boundary.
+            if cache_key is not None and self._cache is not None:
+                self._cache.set(cache_key, response, ttl_seconds=self._cache_ttl_seconds)
+
             return response
 
         raise AllProvidersFailed(
