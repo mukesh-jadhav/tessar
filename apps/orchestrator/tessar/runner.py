@@ -579,8 +579,58 @@ async def run(run_id: str, *, delivery_attempt: int = 1) -> None:
     # Picks components from KB + findings; every pick must cite a KB id
     # or a finding RQ-NN. Ungrounded picks are rejected and re-prompted.
     from tessar.kb import load_kb
+    from tessar.llm.embeddings import build_embedder
+    from tessar.retrieval import HybridRetriever
 
-    kb_candidates = load_kb()
+    _all_kb = load_kb()
+
+    # ── Phase 3.7.0: hybrid KB retrieval (BM25 + vector + RRF) ───
+    # Per ADR-0017. Narrows the full KB (~300 records at target scale)
+    # down to a focused candidate set so the Tier-A agents stay under
+    # the $0.85/run budget. At MVP scale (<top_k records) every record
+    # is returned in ranked order — behaviourally a no-op but the audit
+    # trail is in place from day one.
+    _retrieval_query = " ".join(
+        s
+        for s in [
+            normalized.summary,
+            " ".join(fr.description for fr in requirements.functional),
+            " ".join(nfr.statement for nfr in requirements.non_functional),
+            " ".join(q.question for q in research_plan.questions),
+        ]
+        if s
+    )
+    _retriever = HybridRetriever(records=_all_kb, embedder=build_embedder())
+    _retrieval_hits = _retriever.retrieve(_retrieval_query, top_k=20)
+    kb_candidates = [h.record for h in _retrieval_hits]
+    await _emit(
+        run_id,
+        {
+            "kind": "retrieval",
+            "t": 3310,
+            "payload": {
+                "query_chars": len(_retrieval_query),
+                "corpus_size": len(_all_kb),
+                "top_k": len(kb_candidates),
+                "hits": [
+                    {
+                        "kb_id": h.record.id,
+                        "score": round(h.score, 5),
+                        "bm25_rank": h.bm25_rank,
+                        "vector_rank": h.vector_rank,
+                    }
+                    for h in _retrieval_hits
+                ],
+            },
+        },
+    )
+    log.info(
+        "retrieval.ok",
+        run_id=run_id,
+        corpus_size=len(_all_kb),
+        top_k=len(kb_candidates),
+        query_chars=len(_retrieval_query),
+    )
     await _emit(
         run_id,
         {

@@ -13,6 +13,10 @@ dependencies = [
     "sqlalchemy[asyncio]>=2.0.36",
     "asyncpg>=0.30.0",
     "pgvector>=0.3.6",
+    # Hybrid KB retrieval (ADR-0017) — BM25 + vector cosine + RRF over
+    # the in-memory KB. numpy is pgvector's transitive dep already; we
+    # pin it explicitly so the retrieval module owns its own contract.
+    "numpy>=1.26.0",
     "google-cloud-secret-manager>=2.20.0",
     "google-cloud-pubsub>=2.26.0",
     "google-cloud-storage>=2.18.2",
