@@ -715,7 +715,7 @@ async def run(run_id: str, *, delivery_attempt: int = 1) -> None:
                 "payload": {
                     "phase": "architect",
                     "status": "failed",
-                    "note": "architect produced ungrounded or topologically broken output twice",
+                    "note": "architect produced ungrounded or topologically broken output three times",
                 },
             },
         )

@@ -1,17 +1,25 @@
 """architect — fifth real node of the agent graph (Phase 3.8).
 
-Tier-A. Strict JSON output validated against `Architecture`. Same
-single-retry-on-failure pattern as `synthesizer`, with two
-admissibility checks beyond Pydantic:
+Tier-A. Strict JSON output validated against `Architecture`. Up to
+three attempts: the first uses the normal prompt; attempts 2 and 3
+append a comprehensive ADR-0006 admissibility checklist plus the
+specific errors from the prior response. Attempt 3 also lowers
+temperature to 0.1 and adds a self-consistency escape-hatch
+("remove the offending element rather than leave inconsistency").
+Two admissibility checks run beyond Pydantic:
 
-1. **Citation grounding** — every `ArchNode.cite` must reference a
-   supplied KB id or a returned `RQ-NN` finding (failed research
-   questions are NOT evidence). Mirrors the synthesizer rule.
+1. **Citation grounding** — every `ArchNode.cite` (and every cite on
+   edges/flows/integration_contract/component_rationales/failure_modes)
+   must reference a supplied KB id or a returned `RQ-NN` finding;
+   failed research questions are NOT evidence.
 2. **Topology integrity** — every edge's `from`/`to` and every flow's
-   `nodes[]` entry must reference a defined `node.id`; no self-loops.
+   `nodes[]` entry must reference a defined `node.id`; no self-loops;
+   integration_contracts must match defined edges; failure_modes must
+   cover every node with a non-empty failure_domain; build_sequence
+   must reference defined node ids.
 
-A failure of either check on the retry raises `ArchitectureError`; the
-runner marks the run failed.
+If attempt 3 still fails, `ArchitectureError` is raised and the runner
+marks the run failed + refunds.
 
 Public surface: ``architect(normalized, requirements, synthesis,
 findings, kb_candidates, *, router) -> Architecture``.
@@ -42,6 +50,68 @@ PROMPT_VERSION = "v2"
 
 _FENCE = re.compile(r"^\s*```(?:json)?\s*|\s*```\s*$", re.MULTILINE)
 _REQUIRED_SEQUENCE_KINDS = frozenset({"write", "read", "async"})
+
+# Full ADR-0006 admissibility checklist used in retry directives. Empirically,
+# narrow retry messages ("fix your citations") only nudge the model on the
+# rules they enumerate; models that violate failure_modes/build_sequence/
+# integration_contract rules on attempt 1 tend to repeat the same mistake
+# on attempt 2 because the directive never reminded them of those rules.
+_ADMISSIBILITY_CHECKLIST = (
+    "ADR-0006 ADMISSIBILITY CHECKLIST \u2014 every one MUST hold:\n"
+    "  1. Every node.cite, edge.cite, flow.cite, integration_contract[*].cite, "
+    "component_rationales[*].cite, and failure_modes[*].cite MUST reference a "
+    "supplied KB id (kind='kb') or an RQ-NN with a returned finding (kind='finding'). "
+    "Failed research questions are NOT evidence.\n"
+    "  2. Every edge.from/edge.to and every flow.nodes[*] entry MUST reference "
+    "a defined node.id. No self-loops.\n"
+    "  3. integration_contract[*] src\u2192to MUST match a defined edge pair.\n"
+    "  4. component_rationales is non-empty; every entry references a defined "
+    "node.id and a supplied requirement.id (FR-* or NFR-*).\n"
+    "  5. failure_modes MUST include at least one entry per node that declares "
+    "a non-empty failure_domain. Every node.id appearing in any node.failure_domain "
+    "MUST also appear as a failure_modes[*].node_id. node.failure_domain entries "
+    "must reference defined node ids and exclude the node itself.\n"
+    "  6. build_sequence MUST have 3-6 phases; every phase.nodes[*] MUST "
+    "reference a defined node.id.\n"
+    "  7. Exactly 3 sequence_diagrams, one each of kind: write, read, async."
+)
+
+
+def _build_retry_message(
+    prior_response_text: str,
+    errors_text: str,
+    *,
+    final_attempt: bool,
+) -> LlmMessage:
+    """Build the user turn that follows a rejected attempt.
+
+    `final_attempt` switches to FINAL framing and adds a self-consistency
+    escape hatch: rather than leaving an admissibility hole, the model
+    is instructed to remove the offending field (e.g. drop a node's
+    `failure_domain` rather than leave a node uncovered by
+    `failure_modes`).
+    """
+    header = (
+        "FINAL ATTEMPT. The previous two responses were both rejected."
+        if final_attempt
+        else "Your previous response was rejected:"
+    )
+    footer = (
+        "\n\nIf you cannot satisfy a rule, REMOVE the offending element rather "
+        "than leave the output inconsistent (e.g. drop a node's failure_domain "
+        "entries before omitting its failure_modes coverage). Self-consistency "
+        "outranks completeness on this final attempt."
+        if final_attempt
+        else ""
+    )
+    content = (
+        f"{header}\n\n"
+        f"{errors_text}\n\n"
+        "Output a corrected JSON object only. No prose, no fences.\n\n"
+        f"{_ADMISSIBILITY_CHECKLIST}"
+        f"{footer}"
+    )
+    return LlmMessage(role="user", content=content)
 
 
 class ArchitectureError(RuntimeError):
@@ -274,8 +344,11 @@ def architect(
 ) -> Architecture:
     """Run the architect node.
 
-    One retry on validation OR admissibility failure. Two failures →
-    `ArchitectureError`; runner marks the run failed + refunds.
+    Up to three attempts. Attempt 1 = normal prompt. Attempt 2 = append
+    rejection turn with full ADR-0006 admissibility checklist. Attempt 3
+    = same checklist + FINAL-attempt framing + self-consistency escape
+    hatch, at temperature 0.1. Three failures → `ArchitectureError`;
+    runner marks the run failed + refunds.
     """
     prompt_md = _load_prompt()
     normalized_json = normalized.model_dump_json(exclude_none=False)
@@ -347,49 +420,84 @@ def architect(
         retry_messages = [
             *messages,
             LlmMessage(role="assistant", content=response_text or "<empty>"),
-            LlmMessage(
-                role="user",
-                content=(
-                    "Your previous response was rejected:\n\n"
-                    f"{first_err}\n\n"
-                    "Output a corrected JSON object only. No prose, no fences. "
-                    "Every node.cite MUST reference a supplied KB id or a RQ-NN "
-                    "with a finding. Every edge from/to and every flow.nodes[] "
-                    "entry MUST reference a defined node id. No self-loops."
-                ),
-            ),
+            _build_retry_message(response_text, first_err or "", final_attempt=False),
         ]
         retry_budget = initial_budget
 
+    # --- Attempt 2 ----------------------------------------------------------
     try:
         retry = router.generate(
             retry_messages, agent_name=AGENT_NAME, max_tokens=retry_budget, temperature=0.2
         )
     except OutputTruncatedError as trunc:
+        # Two truncations means budget, not content \u2014 a 3rd attempt won't
+        # help. Bail with the existing terminal error.
         raise ArchitectureError(
             "architect produced output that exceeded max_output_tokens twice",
             raw_text=trunc.partial_text,
             validation_error=str(trunc),
         ) from trunc
+
+    second_err: str | None = None
+    second_response_text = retry.text
+    arch_attempt2: Architecture | None = None
     try:
-        arch = _parse(retry.text)
-    except (ValidationError, json.JSONDecodeError) as second_err:
+        arch_attempt2 = _parse(retry.text)
+    except (ValidationError, json.JSONDecodeError) as parse_err:
+        second_err = f"JSON/schema error: {parse_err}"
+
+    if arch_attempt2 is not None:
+        admissibility = _admissibility_errors(
+            arch_attempt2,
+            kb_ids=kb_ids,
+            finding_ids=finding_ids,
+            requirement_ids=requirement_ids,
+        )
+        if not admissibility:
+            return arch_attempt2
+        second_err = "Architecture rejected:\n- " + "\n- ".join(admissibility)
+
+    # --- Attempt 3 (final) --------------------------------------------------
+    # Same Tier-A model (architect is already at the frontier tier), but
+    # lower temperature for determinism + comprehensive checklist + a
+    # self-consistency escape hatch in the directive. This is the last
+    # shot before the run fails and the user gets refunded.
+    final_messages = [
+        *messages,
+        LlmMessage(role="assistant", content=response_text or "<empty>"),
+        _build_retry_message(response_text, first_err or "", final_attempt=False),
+        LlmMessage(role="assistant", content=second_response_text or "<empty>"),
+        _build_retry_message(second_response_text, second_err or "", final_attempt=True),
+    ]
+    try:
+        final = router.generate(
+            final_messages, agent_name=AGENT_NAME, max_tokens=retry_budget, temperature=0.1
+        )
+    except OutputTruncatedError as trunc:
         raise ArchitectureError(
-            "architect produced invalid JSON twice",
-            raw_text=retry.text,
-            validation_error=str(second_err),
-        ) from second_err
+            "architect produced output that exceeded max_output_tokens on final attempt",
+            raw_text=trunc.partial_text,
+            validation_error=str(trunc),
+        ) from trunc
+    try:
+        arch_final = _parse(final.text)
+    except (ValidationError, json.JSONDecodeError) as final_parse_err:
+        raise ArchitectureError(
+            "architect produced invalid JSON three times",
+            raw_text=final.text,
+            validation_error=str(final_parse_err),
+        ) from final_parse_err
 
     admissibility = _admissibility_errors(
-        arch,
+        arch_final,
         kb_ids=kb_ids,
         finding_ids=finding_ids,
         requirement_ids=requirement_ids,
     )
     if admissibility:
         raise ArchitectureError(
-            "architect produced ungrounded or topologically broken output twice",
-            raw_text=retry.text,
+            "architect produced ungrounded or topologically broken output three times",
+            raw_text=final.text,
             validation_error="; ".join(admissibility),
         )
-    return arch
+    return arch_final

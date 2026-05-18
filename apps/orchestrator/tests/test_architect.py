@@ -20,6 +20,7 @@ from tessar.agents.architect import (
 from tessar.kb import KbRecord
 from tessar.llm import BudgetTracker, LlmRouter, Tier
 from tessar.llm.providers.mock import MockLlmProvider
+from tessar.llm.types import LlmMessage
 from tessar.schemas import (
     Architecture,
     NormalizedBrief,
@@ -634,7 +635,7 @@ def test_architect_retries_once_on_validation_error() -> None:
     assert result.nodes[0].id == "N-01"
 
 
-def test_architect_raises_after_two_failures() -> None:
+def test_architect_raises_after_three_failures() -> None:
     p = MockLlmProvider(responder=lambda _msgs, _tier: "still not json")
     with pytest.raises(ArchitectureError) as excinfo:
         architect(
@@ -746,7 +747,7 @@ def test_architect_retries_on_dangling_flow_node() -> None:
     assert all(ref in node_ids for f in result.flows for ref in f.nodes)
 
 
-def test_architect_raises_after_two_admissibility_failures() -> None:
+def test_architect_raises_after_three_admissibility_failures() -> None:
     bad = _good_payload()
     edges = bad["edges"]
     assert isinstance(edges, list)
@@ -1016,3 +1017,129 @@ def test_admissibility_flags_build_phase_unknown_node() -> None:
     arch = Architecture.model_validate(bad)
     errors = _admissibility_errors(arch, **_adm_kwargs())
     assert any("build_sequence[0] node='N-99'" in e for e in errors)
+
+
+# ─── 3-attempt retry (regression for repeated architect failures) ─────────
+
+
+def test_architect_succeeds_on_third_attempt() -> None:
+    """Two consecutive admissibility failures followed by a good payload
+    must NOT raise — the architect now has three attempts, not two.
+
+    Regression test for the prod failure mode where the model repeated
+    the same failure_modes-coverage mistake across both retries because
+    the retry directive didn't enumerate the failure_modes rule.
+    """
+    bad = _good_payload()
+    edges = bad["edges"]
+    assert isinstance(edges, list)
+    edges[0] = {**edges[0], "to": "N-99"}  # dangling edge → admissibility fails
+    responses = iter([json.dumps(bad), json.dumps(bad), json.dumps(_good_payload())])
+    p = MockLlmProvider(responder=lambda _msgs, _tier: next(responses))
+    result = architect(
+        _normalized(),
+        _requirements(),
+        _synthesis(),
+        _findings(),
+        _kb(),
+        router=_router(p),
+    )
+    # Third attempt's clean payload was accepted.
+    assert all(e.to in {n.id for n in result.nodes} for e in result.edges)
+
+
+def test_architect_retry_directive_includes_full_admissibility_checklist() -> None:
+    """The retry user message must enumerate ALL ADR-0006 admissibility
+    rule classes, not just citation+edge. Models tend to under-correct
+    when only the rule classes they're reminded about are reinforced.
+
+    Regression for the prod failure where the retry directive only
+    mentioned cite/edge/self-loop and the model repeated a
+    failure_modes-coverage mistake.
+    """
+    bad = _good_payload()
+    edges = bad["edges"]
+    assert isinstance(edges, list)
+    edges[0] = {**edges[0], "to": "N-99"}
+
+    seen_messages: list[list[LlmMessage]] = []
+
+    def _responder(msgs, _tier):  # type: ignore[no-untyped-def]
+        seen_messages.append(list(msgs))
+        # Two bad responses to force the 3rd attempt, then a clean one
+        # so the test doesn't raise on irrelevant grounds.
+        if len(seen_messages) < 3:
+            return json.dumps(bad)
+        return json.dumps(_good_payload())
+
+    p = MockLlmProvider(responder=_responder)
+    architect(
+        _normalized(),
+        _requirements(),
+        _synthesis(),
+        _findings(),
+        _kb(),
+        router=_router(p),
+    )
+
+    # Inspect the retry user turn appended for attempt 2 (last message).
+    attempt2_msgs = seen_messages[1]
+    last = attempt2_msgs[-1]
+    retry_text = getattr(last, "content", "")
+    assert "failure_modes" in retry_text, (
+        "retry directive must reinforce the failure_modes coverage rule"
+    )
+    assert "component_rationales" in retry_text
+    assert "integration_contract" in retry_text
+    assert "build_sequence" in retry_text
+    assert "sequence_diagrams" in retry_text
+    # Attempt 2 is NOT the final attempt — should not carry FINAL framing.
+    assert "FINAL ATTEMPT" not in retry_text
+
+    # Inspect the retry user turn appended for attempt 3 (final).
+    attempt3_msgs = seen_messages[2]
+    final_text = getattr(attempt3_msgs[-1], "content", "")
+    assert "FINAL ATTEMPT" in final_text
+    assert "Self-consistency outranks completeness" in final_text
+
+
+def test_architect_third_attempt_uses_lower_temperature() -> None:
+    """The 3rd attempt should drop temperature to 0.1 for determinism."""
+    bad = _good_payload()
+    edges = bad["edges"]
+    assert isinstance(edges, list)
+    edges[0] = {**edges[0], "to": "N-99"}
+
+    temps_seen: list[float] = []
+    call_count = {"n": 0}
+
+    def _responder(_msgs, _tier):  # type: ignore[no-untyped-def]
+        call_count["n"] += 1
+        # First two attempts return bad; third returns good.
+        if call_count["n"] <= 2:
+            return json.dumps(bad)
+        return json.dumps(_good_payload())
+
+    p = MockLlmProvider(responder=_responder)
+    # Wrap the router's generate to capture temperature.
+    router = _router(p)
+    original_generate = router.generate
+
+    def _capturing_generate(*args, **kwargs):  # type: ignore[no-untyped-def]
+        temp = kwargs.get("temperature")
+        temps_seen.append(float(temp) if temp is not None else -1.0)
+        return original_generate(*args, **kwargs)
+
+    router.generate = _capturing_generate  # type: ignore[method-assign]
+    architect(
+        _normalized(),
+        _requirements(),
+        _synthesis(),
+        _findings(),
+        _kb(),
+        router=router,
+    )
+    assert len(temps_seen) == 3
+    assert temps_seen[0] == 0.2
+    assert temps_seen[1] == 0.2
+    assert temps_seen[2] == 0.1, "final attempt must use temperature=0.1"
