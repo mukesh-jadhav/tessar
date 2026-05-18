@@ -1,9 +1,39 @@
 {
-  "_comment": "Baseline aggregate score for the eval suite. Updated by hand after a verified-good nightly run. PR CI compares against this.",
-  "version": 0,
-  "established_at": null,
-  "kb_snapshot_id": null,
-  "aggregate_score": null,
-  "pass_rate": null,
-  "scenario_scores": {}
+  "aggregate_score": 8.5,
+  "pass_rate": 1.0,
+  "suite_passed": true,
+  "n_scored": 1,
+  "n_skipped": 2,
+  "skipped_ids": ["002-fintech-realtime-feed", "003-marketplace-mvp"],
+  "failure_reasons": [],
+  "scenarios": [
+    {
+      "scenario_id": "001-b2b-saas-crm",
+      "weighted_score": 8.5,
+      "passed": true,
+      "failure_reasons": [],
+      "axes": {
+        "groundedness": {
+          "axis": "groundedness",
+          "score": 10.0,
+          "findings": ["all 14 picks cited a real source."]
+        },
+        "schema_validity": {
+          "axis": "schema_validity",
+          "score": 10.0,
+          "findings": ["package parses against the locked subset of `RunPackage`."]
+        },
+        "cost_realism": {
+          "axis": "cost_realism",
+          "score": 10.0,
+          "findings": ["3/3 BOM lines within \u00b150% of KB (1 unmapped, ignored)."]
+        }
+      }
+    }
+  ],
+  "thresholds": {
+    "per_scenario_pass": 7.0,
+    "suite_aggregate": 7.5,
+    "suite_pass_rate": 0.8
+  }
 }

@@ -49,7 +49,7 @@ jobs:
       - run: uv run pytest -q
 
   evals:
-    name: Evals (rubric tests + scenario validation)
+    name: Evals (rubric tests + scenario validation + regression gate)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -68,6 +68,18 @@ jobs:
         run: uv run python -m runners.run_suite
       - name: Validate KB seed records
         run: uv run python -m runners.validate_kb
+      # ADR-0008 regression gate: PRs may not drop suite aggregate by
+      # more than the locked tolerance vs `reports/baseline.json`.
+      - name: Score suite
+        run: |
+          uv run python -m runners.score_suite \
+            --kb-costs reports/kb-cost-map.json \
+            --json-out reports/latest.json
+      - name: Check regression vs baseline
+        run: |
+          uv run python -m runners.check_baseline \
+            --report reports/latest.json \
+            --baseline reports/baseline.json
 
   terraform:
     name: Terraform (fmt, validate)

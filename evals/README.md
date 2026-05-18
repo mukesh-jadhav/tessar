@@ -24,11 +24,23 @@ evals/
 │       └── brief_fidelity.md
 ├── runners/
 │   ├── score_run.py             # score one RunPackage JSON against one scenario
-│   └── run_suite.py             # CLI: score all scenarios, emit report
+│   ├── score_suite.py           # score every (scenario, fixture) pair → JSON report
+│   ├── check_baseline.py        # PR/nightly gate: report vs baseline (ADR-0008)
+│   └── run_suite.py             # CLI: validate every scenario file
 ├── reports/
 │   └── baseline.json            # locked-in baseline (committed; updated by hand)
 └── README.md
 ```
+
+## CI surface
+
+- **Per-PR** (`.github/workflows/pr.yml::evals`): rubric unit tests +
+  scenario validation + KB seed validation + `score_suite` + regression
+  gate against the committed baseline. Drop > 0.5 points = merge blocked.
+- **Nightly** (`.github/workflows/eval-nightly.yml`): scores the full
+  suite, uploads the report as a workflow artifact, posts a job summary,
+  fails the run (and optionally Slacks via `SLACK_EVAL_WEBHOOK`) on
+  regression vs baseline.
 
 ## What works today (Phase 3.0)
 

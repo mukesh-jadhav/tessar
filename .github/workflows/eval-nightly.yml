@@ -1,0 +1,144 @@
+name: Nightly evals
+
+# Nightly quality-gate per ADR-0008. Scores every scenario that has a
+# paired fixture, compares to `evals/reports/baseline.json`, and posts
+# the report as a workflow artifact. Fails the workflow on regression
+# beyond the locked 0.5-pt tolerance (does NOT block deploys — this is
+# an alert channel, not a release gate).
+#
+# Today this scores the canned fixtures committed to the repo, which
+# locks in the rubric + scoring code itself. Once Phase 5+ adds a real
+# "score a live run" mode, this same workflow will fire against `dev`
+# without changing its public contract.
+
+on:
+  schedule:
+    # 05:30 UTC = ~11:00 IST (after Bangalore daily wake-up)
+    - cron: "30 5 * * *"
+  workflow_dispatch:
+    inputs:
+      update_baseline:
+        description: "Overwrite evals/reports/baseline.json with this run's report"
+        required: false
+        default: "false"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eval-nightly
+  cancel-in-progress: false
+
+jobs:
+  evals:
+    name: Score suite vs baseline
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: evals
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        run: pipx install uv
+
+      - run: uv sync --frozen
+
+      # Validates 10 KB seed records + writes reports/kb-cost-map.json
+      # used by the cost_realism axis below.
+      - name: Validate KB seed
+        run: uv run python -m runners.validate_kb
+
+      # Validates every scenario file's structure against _schema.yaml.
+      # Cheap, deterministic, catches malformed scenarios early.
+      - name: Validate scenario YAMLs
+        run: uv run python -m runners.run_suite
+
+      # Score every (scenario, fixture) pair.
+      - name: Score suite
+        id: score
+        run: |
+          set +e
+          uv run python -m runners.score_suite \
+            --kb-costs reports/kb-cost-map.json \
+            --json-out reports/latest.json
+          echo "score_exit=$?" >> "$GITHUB_OUTPUT"
+          set -e
+
+      # Compare against the committed baseline.
+      - name: Check regression vs baseline
+        id: regression
+        run: |
+          set +e
+          uv run python -m runners.check_baseline \
+            --report reports/latest.json \
+            --baseline reports/baseline.json
+          echo "regression_exit=$?" >> "$GITHUB_OUTPUT"
+          set -e
+
+      - name: Generate summary
+        if: always()
+        run: |
+          {
+            echo "## Nightly eval report"
+            echo ""
+            if [ -f reports/latest.json ]; then
+              echo "### Suite"
+              python -c "import json; r=json.load(open('reports/latest.json')); print(f\"- aggregate: **{r['aggregate_score']:.2f}/10**\"); print(f\"- pass rate: **{r['pass_rate']:.0%}**\"); print(f\"- scored: {r['n_scored']}  skipped: {r['n_skipped']}\"); print(f\"- suite passed: **{r['suite_passed']}**\")"
+              echo ""
+              echo "### Per-scenario"
+              python -c "import json; r=json.load(open('reports/latest.json')); [print(f\"- {s['scenario_id']}: **{s['weighted_score']:.2f}** (passed={s['passed']})\") for s in r['scenarios']]"
+            else
+              echo "_no report — score step failed before writing latest.json_"
+            fi
+            echo ""
+            echo "### Gate outcomes"
+            echo "- score_suite exit: ${{ steps.score.outputs.score_exit }}"
+            echo "- check_baseline exit: ${{ steps.regression.outputs.regression_exit }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report-${{ github.run_id }}
+          path: |
+            evals/reports/latest.json
+            evals/reports/kb-cost-map.json
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Optionally bump baseline
+        # Manual trigger only — never auto-baselines (ADR-0008 §"Baseline
+        # drift management requires discipline"). Operator decides.
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.update_baseline == 'true'
+        run: |
+          cp reports/latest.json reports/baseline.json
+          echo "::notice::baseline updated — commit and push manually if intended."
+
+      # Fail the workflow on either a suite bar miss OR a regression vs baseline.
+      - name: Enforce gates
+        if: always()
+        run: |
+          if [ "${{ steps.score.outputs.score_exit }}" != "0" ]; then
+            echo "::error::score_suite failed (suite below ADR-0008 bar)"
+            exit 1
+          fi
+          if [ "${{ steps.regression.outputs.regression_exit }}" != "0" ]; then
+            echo "::error::regression vs baseline detected"
+            exit 1
+          fi
+
+      # Slack notify on failure (env-gated — secret may not be set yet).
+      - name: Notify Slack on failure
+        if: failure() && env.SLACK_EVAL_WEBHOOK != ''
+        env:
+          SLACK_EVAL_WEBHOOK: ${{ secrets.SLACK_EVAL_WEBHOOK }}
+        run: |
+          curl -sS -X POST -H 'Content-Type: application/json' \
+            -d "{\"text\":\":rotating_light: TESSAR nightly evals FAILED. Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}" \
+            "$SLACK_EVAL_WEBHOOK"
