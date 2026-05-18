@@ -4,8 +4,14 @@ Keeps the router-construction policy (which providers, in what order,
 with what budget) in ONE place so agents can just call
 `build_router(run_id=...)` and not care about the chain.
 
-Provider chain (per architecture.instructions.md):
-    Vertex Gemini  →  Vertex Claude  →  OpenAI direct
+Provider chain (per ADR-0015 + architecture.instructions.md):
+    Tier-A  : Vertex Claude (Sonnet 4.5) → Vertex Gemini → OpenAI direct
+    Tier-B/C: Vertex Gemini (Flash / Flash-Lite) → OpenAI direct
+
+Mechanism: each provider opts in to specific tiers via `supports(tier)`.
+The router filters the chain per call, so a single ordered chain
+[Claude(A only), Gemini(A/B/C), OpenAI(A/B/C)] gives the right primary
+for every tier with no per-tier wiring needed in the router.
 
 In dev / CI, when `VERTEX_PROJECT` is unset, the chain collapses to a
 single `MockLlmProvider`. This is the path the unit tests exercise.
@@ -21,15 +27,39 @@ from .budget import BudgetTracker
 from .providers.base import LlmProvider
 from .providers.mock import MockLlmProvider
 from .router import LlmRouter
+from .types import Tier
 
 log = logging.getLogger(__name__)
 
 
 def _build_provider_chain() -> list[LlmProvider]:
     """Assemble the provider chain. Real providers are added only when
-    their config is present so a missing SDK never breaks startup."""
+    their config is present so a missing SDK never breaks startup.
+
+    Order matters — per ADR-0015 Claude goes FIRST so the router picks it
+    for Tier-A. Gemini is restricted to {A,B,C} (default) and serves as
+    Tier-A fallback + Tier-B/C primary (Claude is skipped for B/C via its
+    own `supported_tiers={Tier.A}`).
+    """
     chain: list[LlmProvider] = []
 
+    # 1. Vertex Claude — Tier-A primary (per ADR-0015).
+    if settings.vertex_project:
+        try:
+            from .providers.vertex_claude import VertexClaudeProvider
+
+            chain.append(
+                VertexClaudeProvider(
+                    project=settings.vertex_project,
+                    location=settings.vertex_location,
+                    # Default `supported_tiers={Tier.A}` — Claude only
+                    # serves Tier-A. Tier-B/C falls through to Gemini.
+                )
+            )
+        except Exception as e:  # SDK missing, auth failure, etc.
+            log.warning("llm.vertex_claude_unavailable err=%s", e)
+
+    # 2. Vertex Gemini — Tier-A fallback + Tier-B/C primary.
     if settings.vertex_project:
         try:
             from .providers.vertex_gemini import VertexGeminiProvider
@@ -38,13 +68,13 @@ def _build_provider_chain() -> list[LlmProvider]:
                 VertexGeminiProvider(
                     project=settings.vertex_project,
                     location=settings.vertex_location,
+                    supported_tiers={Tier.A, Tier.B, Tier.C},
                 )
             )
         except Exception as e:  # SDK missing, auth failure, etc.
             log.warning("llm.vertex_gemini_unavailable err=%s", e)
 
-    # TODO Phase 3.4: Vertex Claude provider
-    # TODO Phase 3.4: OpenAI direct provider (last-resort)
+    # TODO Phase 3.4: OpenAI direct provider (last-resort fallback for all tiers)
 
     if not chain:
         # Dev / CI default: deterministic mock so the run loop works

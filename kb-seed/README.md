@@ -3,7 +3,7 @@
 Source of truth for TESSAR's knowledge base. PR-reviewed YAML records loaded
 into Postgres at deploy.
 
-See [.github/instructions/architecture.instructions.md](../.github/instructions/architecture.instructions.md) (KB section).
+See [.github/instructions/architecture.instructions.md](../.github/instructions/architecture.instructions.md) (KB section) and [ADR-0016](../docs/adr/0016-kb-scope-bounded-comprehensive.md) (scope + buckets + cadence).
 
 ## Layout
 
@@ -14,6 +14,27 @@ kb-seed/
 ├── patterns/               # one YAML per architectural pattern (Phase 3.2+)
 └── reference-archs/        # one YAML per anchor reference architecture (Phase 3.2+)
 ```
+
+## Scope (per ADR-0016)
+
+Target ~300 records total, distributed:
+
+| Bucket                                                 | Target |
+| ------------------------------------------------------ | ------ |
+| GCP components (full BOM + cost)                       | ~105   |
+| AWS equivalents (component list, no cost)              | ~50    |
+| Azure equivalents (component list, no cost)            | ~50    |
+| Third-party SaaS (auth, payments, observability, etc.) | ~65    |
+| Patterns                                               | 30     |
+| Reference architectures                                | 15     |
+
+Out of scope (do NOT add): embedded/IoT, gaming, HPC, on-prem hardware, crypto/web3, telco, ERP. See ADR-0016 for the full out-of-scope list.
+
+## Curation cadence
+
+- One bucket per PR (max 30 records). Reviewer signs off on: schema compliance, sources reachable, capability summary correct, pricing-model class correct, regions list correct, compliance flags correct.
+- AI-assisted drafting allowed; PR review mandatory. Tag LLM-drafted records `provenance: "llm-assisted"` so the freshness job can prioritise re-verification.
+- Sustained pace: 2–4 buckets / week → target reached in 8–12 weeks part-time.
 
 ## Validation
 

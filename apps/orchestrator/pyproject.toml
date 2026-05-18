@@ -19,6 +19,9 @@ dependencies = [
     "google-cloud-aiplatform>=1.71.0",
     "vertexai>=1.71.1",
     "google-auth>=2.35.0",
+    # Vertex AI Anthropic (Claude Sonnet 4.5) — Tier-A primary per ADR-0015.
+    # The `vertex` extra pulls google-auth so AnthropicVertex picks up ADC.
+    "anthropic[vertex]>=0.40.0",
     "python-dotenv>=1.0.1",
     "redis>=5.2.0",
     "markdown>=3.7",

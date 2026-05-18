@@ -49,9 +49,11 @@ class Settings(BaseSettings):
     vertex_location: str = Field(default="asia-south1", alias="VERTEX_LOCATION")
 
     # Hard per-run ceilings — router raises BudgetExceeded if breached.
-    # Dev cap mirrors ADR-0008 ($0.50/run); production caps are tuned in
-    # Phase 4 alongside Stripe pricing.
-    llm_cap_usd_per_run: float = Field(default=0.50, alias="LLM_CAP_USD_PER_RUN")
+    # Bumped from $0.50 → $0.85 per ADR-0015 (Claude Sonnet 4.5 Tier-A).
+    # Derivation: 3 Tier-A calls × ~$0.21/call (30k in + 8k out @ Sonnet 4.5
+    # rates) + ~$0.10 Tier-B/C floor + 30% safety margin. Re-tuned in
+    # Phase 4 alongside payment-gateway pricing.
+    llm_cap_usd_per_run: float = Field(default=0.85, alias="LLM_CAP_USD_PER_RUN")
     llm_cap_tokens_per_run: int = Field(default=400_000, alias="LLM_CAP_TOKENS_PER_RUN")
 
 
