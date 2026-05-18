@@ -34,6 +34,11 @@ import {
   fmtUsd,
 } from "@/components/package/package-view";
 import { SystemDesignPane } from "@/components/package/system-design-sections";
+import { BuildTimeline } from "@/components/decide/build-timeline";
+import { CostBreakdownChart } from "@/components/decide/cost-breakdown-chart";
+import { CostTrajectoryChart } from "@/components/decide/cost-trajectory-chart";
+import { RiskHeatmap } from "@/components/decide/risk-heatmap";
+import { SectionPager } from "@/components/decide/section-pager";
 import {
   deriveExecutiveSummary,
   groupDecisionsByTier,
@@ -86,23 +91,71 @@ export function DecideViewer({
       <Nav active={section} onChange={setSection} />
 
       <main className="mx-auto w-full max-w-6xl px-6 pb-24 pt-8 md:px-10">
-        {section === "verdict" ? <VerdictSection pkg={pkg} /> : null}
-        {section === "system-design" ? (
-          <SystemDesignPane
-            sequenceDiagrams={pkg.sequenceDiagrams}
-            integrationContracts={pkg.integrationContracts}
-            componentRationales={pkg.componentRationales}
-            failureModes={pkg.failureModes}
-            buildSequence={pkg.buildSequence}
-            nodes={pkg.nodes}
-            onCite={() => setSection("audit")}
-          />
+        {section === "verdict" ? (
+          <>
+            <VerdictSection pkg={pkg} />
+            <SectionPager
+              hint="How it all fits together, sequence by sequence."
+              next={{ label: "System design", onClick: () => goTo(setSection, "system-design") }}
+            />
+          </>
         ) : null}
-        {section === "decisions" ? <DecisionsSection pkg={pkg} /> : null}
-        {section === "numbers" ? <NumbersSection pkg={pkg} /> : null}
-        {section === "risks" ? <RisksSection pkg={pkg} /> : null}
+        {section === "system-design" ? (
+          <>
+            <SystemDesignPane
+              sequenceDiagrams={pkg.sequenceDiagrams}
+              integrationContracts={pkg.integrationContracts}
+              componentRationales={pkg.componentRationales}
+              failureModes={pkg.failureModes}
+              buildSequence={pkg.buildSequence}
+              nodes={pkg.nodes}
+              onCite={() => setSection("audit")}
+            />
+            <SectionPager
+              prev={{ label: "Verdict", onClick: () => goTo(setSection, "verdict") }}
+              hint="Every pick, what we considered instead, and why we rejected it."
+              next={{ label: "Decisions", onClick: () => goTo(setSection, "decisions") }}
+            />
+          </>
+        ) : null}
+        {section === "decisions" ? (
+          <>
+            <DecisionsSection pkg={pkg} />
+            <SectionPager
+              prev={{ label: "System design", onClick: () => goTo(setSection, "system-design") }}
+              hint="What this costs today, and what it costs at 10× and 100×."
+              next={{ label: "Numbers", onClick: () => goTo(setSection, "numbers") }}
+            />
+          </>
+        ) : null}
+        {section === "numbers" ? (
+          <>
+            <NumbersSection pkg={pkg} />
+            <SectionPager
+              prev={{ label: "Decisions", onClick: () => goTo(setSection, "decisions") }}
+              hint="What can go wrong, plotted on a severity × likelihood heat-map."
+              next={{ label: "Risks", onClick: () => goTo(setSection, "risks") }}
+            />
+          </>
+        ) : null}
+        {section === "risks" ? (
+          <>
+            <RisksSection pkg={pkg} />
+            <SectionPager
+              prev={{ label: "Numbers", onClick: () => goTo(setSection, "numbers") }}
+              hint="Where every claim above comes from — sources, snapshot, prompts."
+              next={{ label: "Audit", onClick: () => goTo(setSection, "audit") }}
+            />
+          </>
+        ) : null}
         {section === "audit" ? (
-          <AuditSection pkg={pkg} runId={runId} completedLabel={completedLabel} />
+          <>
+            <AuditSection pkg={pkg} runId={runId} completedLabel={completedLabel} />
+            <SectionPager
+              prev={{ label: "Risks", onClick: () => goTo(setSection, "risks") }}
+              hint="You've reached the end. Download the PDF above to share."
+            />
+          </>
         ) : null}
       </main>
     </AppShell>
@@ -110,6 +163,20 @@ export function DecideViewer({
 }
 
 /* ─── Action bar & Nav ─────────────────────────────────────────── */
+
+/**
+ * Scrolls back to the top of the document on section change so the
+ * reader doesn't get dropped into the middle of the next section at
+ * whatever scroll position the previous section was at. Wraps the
+ * useState setter so every nav source (top tabs + bottom pager) shares
+ * the same behaviour.
+ */
+function goTo(setSection: (s: Section) => void, next: Section): void {
+  setSection(next);
+  if (typeof window !== "undefined") {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+}
 
 /**
  * Slim title strip that sits below the AppShell header and above the
@@ -189,7 +256,7 @@ function Nav({
               key={s.id}
               role="tab"
               aria-selected={isActive}
-              onClick={() => onChange(s.id)}
+              onClick={() => goTo(onChange, s.id)}
               className={[
                 "relative flex shrink-0 flex-col items-start gap-0.5 px-4 py-3 text-left transition-colors",
                 isActive ? "text-on-surface" : "text-on-surface-variant hover:text-on-surface",
@@ -319,6 +386,17 @@ function VerdictSection({ pkg }: { pkg: RunPackage }): React.ReactElement {
           </div>
         </div>
       </Block>
+
+      {/* Build sequence — visual timeline gives a clear "do this first" answer. */}
+      {pkg.buildSequence.length ? (
+        <Block eyebrow="Sequenced build" title="Ship it in this order">
+          <p className="text-on-surface-variant mb-5 max-w-2xl text-[13px] leading-relaxed">
+            Each phase is a coherent shippable slice. Earlier phases unlock later ones; later phases
+            assume the foundation underneath is stable.
+          </p>
+          <BuildTimeline phases={pkg.buildSequence} nodes={pkg.nodes} />
+        </Block>
+      ) : null}
 
       {/* Requirements → Architecture map */}
       {reqMap.some((m) => m.rationales.length > 0) ? (
@@ -532,16 +610,23 @@ function NumbersSection({ pkg }: { pkg: RunPackage }): React.ReactElement {
   return (
     <div className="space-y-6">
       <Block eyebrow="What it costs" title={`${fmtUsd(baseline)}/mo at your starting scale`}>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <CostTier label="1× (today)" cost={baseline} highlight />
-          <CostTier label="10× users + RPS" cost={at10x} />
-          <CostTier label="100× users + RPS" cost={at100x} />
+        <div className="grid gap-4 lg:grid-cols-[1fr_minmax(300px,1.1fr)]">
+          <div className="grid gap-3 sm:grid-cols-3 lg:auto-rows-min lg:grid-cols-1">
+            <CostTier label="1× (today)" cost={baseline} highlight />
+            <CostTier label="10× users + RPS" cost={at10x} />
+            <CostTier label="100× users + RPS" cost={at100x} />
+          </div>
+          <CostTrajectoryChart bom={pkg.bom} />
         </div>
         <p className="text-on-surface-variant mt-3 max-w-2xl text-[12px] leading-relaxed">
           Scale projections multiply each line by its scaling exponent. Fixed costs (KMS, Secret
           Manager) stay constant. These are GCP list prices at the time of the KB snapshot — see
           Audit for dates. They don&apos;t include support contracts or sustained-use discounts.
         </p>
+      </Block>
+
+      <Block eyebrow="Where the money goes" title="Cost share by service">
+        <CostBreakdownChart bom={pkg.bom} />
       </Block>
 
       {missingLikelyItems.length ? (
@@ -675,17 +760,21 @@ function RisksSection({ pkg }: { pkg: RunPackage }): React.ReactElement {
   return (
     <div className="space-y-6">
       <Block eyebrow="What can go wrong" title={`${pkg.risks.length} risks identified`}>
-        <p className="text-on-surface-variant max-w-2xl text-[13px] leading-relaxed">
-          Sorted highest severity and likelihood first. Each entry has a concrete mitigation — if a
-          mitigation reads vague, treat that as a signal that the risk needs more thought before you
-          commit.
+        <p className="text-on-surface-variant mb-5 max-w-2xl text-[13px] leading-relaxed">
+          Plotted on a severity × likelihood heat-map so the hot corner pops out, then listed in
+          full below — sorted highest severity and likelihood first. Each entry has a concrete
+          mitigation; if a mitigation reads vague, treat that as a signal that the risk needs more
+          thought before you commit.
         </p>
+        <RiskHeatmap risks={pkg.risks} />
       </Block>
-      <div className="grid gap-4">
-        {sorted.map((r) => (
-          <RiskCard key={r.id} risk={r} sources={pkg.sources} />
-        ))}
-      </div>
+      <Block eyebrow="In full" title="Every risk, with mitigation">
+        <div className="grid gap-4">
+          {sorted.map((r) => (
+            <RiskCard key={r.id} risk={r} sources={pkg.sources} />
+          ))}
+        </div>
+      </Block>
     </div>
   );
 }
