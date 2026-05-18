@@ -1,6 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -521,6 +522,25 @@ export default function BriefPage(): React.ReactElement {
             )}
           </AnimatePresence>
         </motion.div>
+
+        {/* Legal disclaimer — visible at the moment of commitment. */}
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ ...expressiveDefault, delay: 0.25 }}
+          className="text-on-surface-variant/80 mt-10 max-w-[60ch] text-[11.5px] leading-relaxed"
+        >
+          By starting a run you agree to our{" "}
+          <Link href="/terms" className="hover:text-primary underline-offset-2 hover:underline">
+            Terms
+          </Link>{" "}
+          and{" "}
+          <Link href="/privacy" className="hover:text-primary underline-offset-2 hover:underline">
+            Privacy Policy
+          </Link>
+          . Outputs are AI-generated research suggestions, not professional engineering advice.
+          Validate every recommendation against your own constraints before production use.
+        </motion.p>
       </main>
 
       {/* Sticky action bar — price, est. time, Run button. */}

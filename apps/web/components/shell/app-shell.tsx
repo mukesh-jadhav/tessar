@@ -110,6 +110,42 @@ export function AppShell({
       </header>
 
       {children}
+
+      <SiteFooter />
     </div>
+  );
+}
+
+/* ---------------------------------------------------------------------------
+ * <SiteFooter /> — global footer with legal links + AI disclaimer.
+ *
+ * Sits below every AppShell page so terms / privacy / disclaimer are
+ * always one click away. Kept lightweight; no client state.
+ * ------------------------------------------------------------------------- */
+
+function SiteFooter(): React.ReactElement {
+  const year = new Date().getFullYear();
+  return (
+    <footer className="border-outline-variant/60 text-on-surface-variant relative z-10 mt-16 border-t px-6 py-6 text-[11.5px] md:px-10">
+      <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <p className="max-w-[60ch] leading-relaxed">
+          <span className="text-on-surface font-medium">AI-generated suggestions.</span> Outputs are
+          a researched starting point — not professional engineering, legal, or financial advice.
+          Validate every recommendation before production use.
+        </p>
+        <div className="flex flex-wrap items-center gap-4">
+          <span>© {year} TESSAR</span>
+          <Link href="/terms" className="hover:text-on-surface underline-offset-2 hover:underline">
+            Terms
+          </Link>
+          <Link
+            href="/privacy"
+            className="hover:text-on-surface underline-offset-2 hover:underline"
+          >
+            Privacy
+          </Link>
+        </div>
+      </div>
+    </footer>
   );
 }

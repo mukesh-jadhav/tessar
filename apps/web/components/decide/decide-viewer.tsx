@@ -41,6 +41,7 @@ import {
 } from "@/lib/package-synthesis";
 import type { ExecutiveSummary } from "@/lib/package-synthesis";
 import type { ArchNode, BomLine, Decision, Risk, RunPackage } from "@/lib/run-package";
+import { DISCLAIMER_REPORT_PARAGRAPHS } from "@/lib/legal";
 
 type Section = "verdict" | "system-design" | "decisions" | "numbers" | "risks" | "audit";
 
@@ -776,13 +777,11 @@ function AuditSection({
       </Block>
 
       <Block eyebrow="Disclaimer" title="What this is and isn't">
-        <p className="text-on-surface-variant max-w-2xl text-[13px] leading-relaxed">
-          This package is a researched starting point, not a final architecture. It reflects the
-          knowledge in our KB at snapshot time and the brief as we understood it. Costs are list
-          prices and don&apos;t include support contracts, sustained-use discounts, or your
-          organisation&apos;s negotiated rates. Validate every recommendation against your
-          team&apos;s operational constraints before committing.
-        </p>
+        <div className="text-on-surface-variant max-w-2xl space-y-3 text-[13px] leading-relaxed">
+          {DISCLAIMER_REPORT_PARAGRAPHS.map((p, i) => (
+            <p key={i}>{p}</p>
+          ))}
+        </div>
       </Block>
     </div>
   );
